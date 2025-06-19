@@ -1,0 +1,31 @@
+// routes/admin.js
+const express = require('express');
+const router = express.Router();
+const Booking = require('../models/Booking'); // adjust path if needed
+
+router.get('/bookings', async (req, res) => {
+  try {
+    const bookings = await Booking.find().sort({ createdAt: -1 });
+
+    const today = new Date().toISOString().split('T')[0];
+    const todayBookings = bookings.filter(b => b.createdAt.toISOString().startsWith(today));
+    const revenue = bookings.reduce((sum, b) => sum + (b.totalFare || 0), 0);
+
+
+    res.json({
+      bookings,
+      summary: {
+        total: bookings.length,
+        today: todayBookings.length,
+        revenue,
+        byCarType
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching admin data:', err);
+    res.status(500).json({ error: 'Failed to fetch bookings' });
+  }
+});
+
+module.exports = router;
+
