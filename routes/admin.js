@@ -1,10 +1,42 @@
 // routes/admin.js
 const express = require('express');
 const router = express.Router();
-const Booking = require('../models/Booking'); // adjust path if needed
+const jwt = require('jsonwebtoken');
+const Booking = require('../models/Booking');
 
-// GET all bookings and summary
-router.get('/bookings', async (req, res) => {
+// ✅ Admin Login Route
+router.post('/login', (req, res) => {
+  const { username, password } = req.body;
+
+  if (
+    username === process.env.ADMIN_USERNAME &&
+    password === process.env.ADMIN_PASSWORD
+  ) {
+    const token = jwt.sign({ role: 'admin' }, process.env.JWT_SECRET, {
+      expiresIn: '1d',
+    });
+    return res.json({ token });
+  }
+
+  return res.status(401).json({ error: 'Invalid credentials' });
+});
+
+// ✅ JWT Middleware
+const verifyAdmin = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token provided' });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role !== 'admin') throw new Error();
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+};
+
+// ✅ GET /api/admin/bookings (protected)
+router.get('/bookings', verifyAdmin, async (req, res) => {
   try {
     const bookings = await Booking.find().sort({ createdAt: -1 });
 
@@ -32,8 +64,8 @@ router.get('/bookings', async (req, res) => {
   }
 });
 
-// ✅ PUT /api/admin/bookings/:id/complete
-router.put('/bookings/:id/complete', async (req, res) => {
+// ✅ PUT /api/admin/bookings/:id/complete (protected)
+router.put('/bookings/:id/complete', verifyAdmin, async (req, res) => {
   try {
     const updated = await Booking.findByIdAndUpdate(
       req.params.id,
@@ -46,8 +78,9 @@ router.put('/bookings/:id/complete', async (req, res) => {
     res.status(500).json({ error: 'Failed to update booking status' });
   }
 });
-// DELETE /api/admin/bookings/:id
-router.delete('/bookings/:id', async (req, res) => {
+
+// ✅ DELETE /api/admin/bookings/:id (protected)
+router.delete('/bookings/:id', verifyAdmin, async (req, res) => {
   try {
     await Booking.findByIdAndDelete(req.params.id);
     res.json({ success: true });
