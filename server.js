@@ -3,9 +3,10 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const bookingRoutes = require('./routes/booking');
+const bookingRoutes = require('./routes/bookingRoutes');
 const adminRoutes = require('./routes/admin');
-const blogRoutes = require('./routes/blog'); // ✅ if using blog routes
+const blogRoutes = require('./routes/blogRoutes'); // if you're using blogs
+const distanceRoutes = require('./routes/distance'); // if using distance API
 
 dotenv.config();
 
