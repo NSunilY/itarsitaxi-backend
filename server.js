@@ -22,7 +22,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // for form-data
 
 // Routes
-app.use('/api', bookingRoutes);
+app.use('/api/bookings', bookingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/blogs', blogRoutes); // ✅ add this if blog posting is failing
 
