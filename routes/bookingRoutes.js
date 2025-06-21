@@ -55,14 +55,21 @@ router.post("/", async (req, res) => {
     console.log("✅ Booking saved to MongoDB:", savedBooking);
 
     // ✅ Prepare SMS
-    const message = `Dear ${name}, your ItarsiTaxi booking is confirmed!
-Car: ${carType}
-Fare: ₹${totalFare}
-Distance: ${distance} km
-Payment: ${paymentMode}
-Booking ID: ${savedBooking._id.toString().slice(-6)}
+const message = `🎉 Booking Confirmed!
 
-Thank you for choosing ItarsiTaxi!`;
+Thank you ${name} for choosing ItarsiTaxi 🚖
+
+📍 Trip: Itarsi ➡️ ${dropLocation}
+📅 Date: ${pickupDate} at ${pickupTime}
+🚘 Car Type: ${carType}
+📏 Distance: ${distance} km | ⏱ Duration: ${duration}
+💰 Fare: ₹${totalFare}
+🆔 Booking ID: ${savedBooking._id.toString().slice(-6)}
+
+Need help? We're here 24x7: +91-9876543210
+
+Safe travels! 😊
+- Team ItarsiTaxi`;
 
     console.log("📤 Sending SMS to", mobile);
     await sendSMS(mobile, message);
