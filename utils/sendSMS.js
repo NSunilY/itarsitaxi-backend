@@ -11,22 +11,21 @@ const sendSMS = async (to, message) => {
   }
 
   try {
-    const response = await axios.post(
-      "https://www.fast2sms.com/dev/bulkV2",
-      {
-        sender_id: "TXTIND",
+    const response = await axios({
+      method: "POST",
+      url: "https://www.fast2sms.com/dev/api", // ✅ latest endpoint
+      headers: {
+        authorization: apiKey,
+        "Content-Type": "application/json",
+      },
+      data: {
+        route: "q", // 'q' is quick route; use 'v3' if your account allows it
         message: message,
         language: "english",
-        route: "v3",
+        flash: 0,
         numbers: to,
       },
-      {
-        headers: {
-          Authorization: apiKey,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    });
 
     if (response.data.return !== true) {
       console.error("❌ SMS API Error:", response.data);
