@@ -1,42 +1,38 @@
-// utils/sendSMS.js
 const axios = require("axios");
 require("dotenv").config();
 
-const sendSMS = async (to, message) => {
+const sendSMS = async (number, bookingId, fare) => {
   const apiKey = process.env.FAST2SMS_API_KEY;
+  const senderId = process.env.FAST2SMS_SENDER_ID;  // e.g., 'ITRCTX'
+  const messageId = process.env.FAST2SMS_TEMPLATE_ID; // Your approved message ID
 
-  if (!apiKey) {
-    console.error("❌ FAST2SMS_API_KEY missing in .env");
-    throw new Error("SMS API key not configured");
-  }
+  const payload = new URLSearchParams({
+    sender_id: senderId,
+    message: messageId,
+    variables_values: `${bookingId}|${fare}`,
+    route: "dlt",
+    numbers: number
+  });
 
   try {
-    const response = await axios({
-      method: "POST",
-      url: "https://www.fast2sms.com/dev/api", // ✅ updated endpoint
+    const res = await axios.post("https://www.fast2sms.com/dev/bulkV2", payload, {
       headers: {
         authorization: apiKey,
-        "Content-Type": "application/json",
-      },
-      data: {
-        route: "q", // or 'v3' if you're approved
-        message: message,
-        language: "english",
-        flash: 0,
-        numbers: to,
-      },
+        "Content-Type": "application/x-www-form-urlencoded"
+      }
     });
 
-    if (!response.data || response.data.return !== true) {
-      console.error("❌ SMS API Error:", response.data);
-      throw new Error("Failed to send SMS");
+    if (res.data.return) {
+      console.log("✅ SMS sent to", number);
+    } else {
+      console.error("❌ SMS sending failed:", res.data.message);
     }
 
-    console.log("✅ SMS sent successfully to", to);
-    return response.data;
-  } catch (error) {
-    console.error("❌ SMS sending failed:", error.response?.data || error.message);
-    throw new Error("Failed to send SMS");
+    return res.data;
+
+  } catch (err) {
+    console.error("❌ SMS Error:", err.response?.data || err.message);
+    throw err;
   }
 };
 
