@@ -34,8 +34,14 @@ router.post("/", async (req, res) => {
       carType,
       distance,
       totalFare,
+      dropLocation,
+      pickupDate,
+      pickupTime,
+      tripType,
+      duration
     } = req.body;
 
+    // Validate required fields
     if (!name || !mobile || !paymentMode || !carType || !distance || !totalFare) {
       console.warn("⚠️ Missing required fields");
       return res.status(400).json({ success: false, message: "Missing required fields" });
@@ -49,27 +55,34 @@ router.post("/", async (req, res) => {
       carType,
       distance,
       totalFare,
+      dropLocation,
+      pickupDate,
+      pickupTime,
+      tripType,
+      duration,
     });
 
     const savedBooking = await newBooking.save();
     console.log("✅ Booking saved to MongoDB:", savedBooking);
 
-    // ✅ Prepare SMS
-const message = `🎉 Booking Confirmed!
+    const bookingId = savedBooking._id.toString().slice(-6);
 
-Thank you ${name} for choosing ItarsiTaxi 🚖
+    // ✅ Clean, user-friendly SMS
+    const message = `🎉 ItarsiTaxi Booking Confirmed!
 
-📍 Trip: Itarsi ➡️ ${dropLocation}
-📅 Date: ${pickupDate} at ${pickupTime}
-🚘 Car Type: ${carType}
-📏 Distance: ${distance} km | ⏱ Duration: ${duration}
+Dear ${name},
+Your ride is booked successfully.
+
+📍 From: Itarsi ➡️ ${dropLocation || 'N/A'}
+📅 Date: ${pickupDate || 'N/A'} at ${pickupTime || 'N/A'}
+🚘 Car: ${carType}
+📏 Distance: ${distance} km ⏱ ${duration || 'N/A'}
 💰 Fare: ₹${totalFare}
-🆔 Booking ID: ${savedBooking._id.toString().slice(-6)}
+🆔 Booking ID: ${bookingId}
+💳 Payment: ${paymentMode}
 
-Need help? We're here 24x7: +91-9876543210
-
-Safe travels! 😊
-- Team ItarsiTaxi`;
+📞 For support: +91-9876543210
+Thanks for choosing ItarsiTaxi!`;
 
     console.log("📤 Sending SMS to", mobile);
     await sendSMS(mobile, message);
