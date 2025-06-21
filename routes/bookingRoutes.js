@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const getDistance = require("../utils/getDistance");
-const Booking = require("../models/Booking"); // DB model
-const sendSMS = require("../utils/sendSMS"); // ✅ Import SMS util
+const Booking = require("../models/Booking");
+const sendSMS = require("../utils/sendSMS");
 
 // GET Distance route
 router.get("/distance", async (req, res) => {
@@ -16,6 +16,7 @@ router.get("/distance", async (req, res) => {
     const result = await getDistance(origin, destination);
     res.json(result);
   } catch (err) {
+    console.error("❌ Error in distance API:", err.message);
     res.status(500).json({ error: "Failed to fetch distance." });
   }
 });
@@ -23,6 +24,8 @@ router.get("/distance", async (req, res) => {
 // ✅ POST /api/bookings — Save booking to DB and send SMS
 router.post("/", async (req, res) => {
   try {
+    console.log("📥 Incoming booking request:", req.body);
+
     const {
       name,
       mobile,
@@ -34,6 +37,7 @@ router.post("/", async (req, res) => {
     } = req.body;
 
     if (!name || !mobile || !paymentMode || !carType || !distance || !totalFare) {
+      console.warn("⚠️ Missing required fields");
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
@@ -48,8 +52,9 @@ router.post("/", async (req, res) => {
     });
 
     const savedBooking = await newBooking.save();
+    console.log("✅ Booking saved to MongoDB:", savedBooking);
 
-    // ✅ Send SMS after saving
+    // ✅ Prepare SMS
     const message = `Dear ${name}, your ItarsiTaxi booking is confirmed!
 Car: ${carType}
 Fare: ₹${totalFare}
@@ -59,7 +64,9 @@ Booking ID: ${savedBooking._id.toString().slice(-6)}
 
 Thank you for choosing ItarsiTaxi!`;
 
+    console.log("📤 Sending SMS to", mobile);
     await sendSMS(mobile, message);
+    console.log("✅ SMS sent successfully");
 
     res.status(201).json({
       success: true,
@@ -67,7 +74,7 @@ Thank you for choosing ItarsiTaxi!`;
       bookingId: savedBooking._id,
     });
   } catch (err) {
-    console.error("Booking Error:", err);
+    console.error("🔥 Booking Error:", err.message || err);
     res.status(500).json({ success: false, message: "Booking failed" });
   }
 });
