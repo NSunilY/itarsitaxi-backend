@@ -13,13 +13,13 @@ const sendSMS = async (to, message) => {
   try {
     const response = await axios({
       method: "POST",
-      url: "https://www.fast2sms.com/dev/api", // ✅ latest endpoint
+      url: "https://www.fast2sms.com/dev/api", // ✅ updated endpoint
       headers: {
         authorization: apiKey,
         "Content-Type": "application/json",
       },
       data: {
-        route: "q", // 'q' is quick route; use 'v3' if your account allows it
+        route: "q", // or 'v3' if you're approved
         message: message,
         language: "english",
         flash: 0,
@@ -27,7 +27,7 @@ const sendSMS = async (to, message) => {
       },
     });
 
-    if (response.data.return !== true) {
+    if (!response.data || response.data.return !== true) {
       console.error("❌ SMS API Error:", response.data);
       throw new Error("Failed to send SMS");
     }
