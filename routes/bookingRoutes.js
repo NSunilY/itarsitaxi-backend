@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 const getDistance = require("../utils/getDistance");
 const Booking = require("../models/Booking");
-const sendSMS = require("../utils/sendSMS");
 
 // GET Distance route
 router.get("/distance", async (req, res) => {
@@ -21,7 +20,7 @@ router.get("/distance", async (req, res) => {
   }
 });
 
-// ✅ POST /api/bookings — Save booking to DB and send SMS
+// ✅ POST /api/bookings — Save booking to DB
 router.post("/", async (req, res) => {
   try {
     console.log("📥 Incoming booking request:", req.body);
@@ -64,29 +63,6 @@ router.post("/", async (req, res) => {
 
     const savedBooking = await newBooking.save();
     console.log("✅ Booking saved to MongoDB:", savedBooking);
-
-    const bookingId = savedBooking._id.toString().slice(-6);
-
-    // ✅ Clean, user-friendly SMS
-    const message = `🎉 ItarsiTaxi Booking Confirmed!
-
-Dear ${name},
-Your ride is booked successfully.
-
-📍 From: Itarsi ➡️ ${dropLocation || 'N/A'}
-📅 Date: ${pickupDate || 'N/A'} at ${pickupTime || 'N/A'}
-🚘 Car: ${carType}
-📏 Distance: ${distance} km ⏱ ${duration || 'N/A'}
-💰 Fare: ₹${totalFare}
-🆔 Booking ID: ${bookingId}
-💳 Payment: ${paymentMode}
-
-📞 For support: +91-9876543210
-Thanks for choosing ItarsiTaxi!`;
-
-    console.log("📤 Sending SMS to", mobile);
-    await sendSMS(mobile, message);
-    console.log("✅ SMS sent successfully");
 
     res.status(201).json({
       success: true,
