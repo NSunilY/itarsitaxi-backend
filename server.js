@@ -13,20 +13,24 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// ✅ CORS Middleware — place this BEFORE all other middlewares/routes
 app.use(cors({
-  origin: ['https://itarsitaxi.in'], // ✅ restrict to your frontend domain
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  origin: 'https://itarsitaxi.in', // ✅ Your production frontend domain
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
 }));
+
+// Body parser middlewares
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // for form-data
+app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/blogs', blogRoutes); // ✅ add this if blog posting is failing
+app.use('/api/blogs', blogRoutes);
+app.use('/api/distance', distanceRoutes); // ✅ don't forget this if you're using it
 
-// Root route (helpful for Render test)
+// Health Check Route
 app.get('/', (req, res) => {
   res.send('✅ ItarsiTaxi Backend is Live and Running!');
 });
@@ -38,18 +42,14 @@ if (!mongoURI) {
   process.exit(1);
 }
 
-mongoose.connect(mongoURI, {
-  // These two are now optional in latest Mongoose versions
-  // useNewUrlParser: true,
-  // useUnifiedTopology: true,
-})
-.then(() => console.log('✅ MongoDB connected successfully'))
-.catch((err) => {
-  console.error('❌ MongoDB connection error:', err.message);
-  process.exit(1);
-});
+mongoose.connect(mongoURI)
+  .then(() => console.log('✅ MongoDB connected successfully'))
+  .catch((err) => {
+    console.error('❌ MongoDB connection error:', err.message);
+    process.exit(1);
+  });
 
-// Start Server (IMPORTANT for Render)
+// Start Server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
