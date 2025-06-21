@@ -1,7 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const getDistance = require("../utils/getDistance");
-const Booking = require("../models/Booking"); // Make sure this path is correct
+const Booking = require("../models/Booking"); // DB model
+const sendSMS = require("../utils/sendSMS"); // ✅ Import SMS util
 
 // GET Distance route
 router.get("/distance", async (req, res) => {
@@ -19,7 +20,7 @@ router.get("/distance", async (req, res) => {
   }
 });
 
-// ✅ POST /api/bookings — Save booking to DB
+// ✅ POST /api/bookings — Save booking to DB and send SMS
 router.post("/", async (req, res) => {
   try {
     const {
@@ -47,6 +48,18 @@ router.post("/", async (req, res) => {
     });
 
     const savedBooking = await newBooking.save();
+
+    // ✅ Send SMS after saving
+    const message = `Dear ${name}, your ItarsiTaxi booking is confirmed!
+Car: ${carType}
+Fare: ₹${totalFare}
+Distance: ${distance} km
+Payment: ${paymentMode}
+Booking ID: ${savedBooking._id.toString().slice(-6)}
+
+Thank you for choosing ItarsiTaxi!`;
+
+    await sendSMS(mobile, message);
 
     res.status(201).json({
       success: true,
