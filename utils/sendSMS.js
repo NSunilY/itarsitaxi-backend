@@ -3,14 +3,13 @@ require("dotenv").config();
 
 const sendSMS = async (number, bookingId, fare) => {
   const apiKey = process.env.FAST2SMS_API_KEY;
-  const senderId = process.env.FAST2SMS_SENDER_ID;  // e.g., 'ITRCTX'
-  const messageId = process.env.FAST2SMS_TEMPLATE_ID; // Your approved message ID
+
+  const messageText = `Dear customer, your ItarsiTaxi booking is confirmed.\nBooking ID: ${bookingId}\nEstimated Fare: ₹${fare}\nThank you for choosing us!`;
 
   const payload = new URLSearchParams({
-    sender_id: senderId,
-    message: messageId,
-    variables_values: `${bookingId}|${fare}`,
-    route: "dlt",
+    route: "q", // ✅ Use 'q' for custom messages (Non-DLT)
+    message: messageText,
+    language: "english",
     numbers: number
   });
 
