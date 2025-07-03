@@ -1,22 +1,26 @@
 // utils/sendSMS.js
 const axios = require('axios');
 
-const sendSMS = async (mobile, message) => {
+const sendSMS = async (number, message) => {
   try {
-    const response = await axios.get('https://www.fast2sms.com/dev/bulkV2', {
-      params: {
-        authorization: process.env.FAST2SMS_API_KEY,
-        route: 'q',
-        message: message,
-        language: 'english',
-        flash: 0,
-        numbers: mobile,
+    const res = await axios.post(
+      'https://www.fast2sms.com/dev/bulkV2',
+      {
+        message,
+        language: 'english', // ✅ Must be 'english', not 'unicode'
+        route: 'q',           // ✅ Quick SMS Route
+        numbers: number,
       },
-    });
+      {
+        headers: {
+          authorization: process.env.FAST2SMS_API_KEY,
+        },
+      }
+    );
 
-    console.log(`✅ SMS sent to ${mobile}:`, response.data);
-  } catch (error) {
-    console.error(`❌ SMS sending failed to ${mobile}:`, error.response?.data || error.message);
+    console.log(`✅ SMS sent to ${number}:`, res.data);
+  } catch (err) {
+    console.error(`❌ SMS sending failed to ${number}:`, err.response?.data || err.message);
   }
 };
 

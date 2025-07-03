@@ -4,6 +4,8 @@ const getDistance = require("../utils/getDistance");
 const Booking = require("../models/Booking");
 const sendSMS = require("../utils/sendSMS");
 
+const safe = (v, fallback = "Not Provided") => (v || "").toString().trim() || fallback;
+
 router.get("/distance", async (req, res) => {
   const { origin, destination } = req.query;
   if (!origin || !destination) {
@@ -61,20 +63,19 @@ router.post("/", async (req, res) => {
     const savedBooking = await newBooking.save();
     console.log("✅ Booking saved to MongoDB:", savedBooking);
 
-    /**
-     * ✅ SMS Note:
-     * Messages below must be in plain ENGLISH text only (not Unicode)
-     * Max 150 characters per SMS for Fast2SMS Quick Route (route=q)
-     * Avoid ₹, emojis, Hindi text, or special symbols that trigger Unicode mode
-     */
+    const nameText = safe(name);
+    const carText = safe(carType);
+    const fareText = safe(totalFare);
+    const pickupText = `${safe(pickupDate)} ${safe(pickupTime)}`;
+    const dropText = safe(dropLocation);
+    const mobileText = safe(mobile);
 
-    // Send SMS to Customer
-    const customerMessage = `Hi ${name}, your ItarsiTaxi booking is confirmed. Car: ${carType}, Fare: Rs${totalFare}, Pickup: ${pickupDate} ${pickupTime}. Thank you!`;
-    await sendSMS(mobile, customerMessage);
+    // ✅ English-only text for SMS (to avoid Unicode)
+    const customerMessage = `Hi ${nameText}, your ItarsiTaxi booking is confirmed. Car: ${carText}, Fare: Rs${fareText}, Pickup: ${pickupText}. Thank you!`;
+    const adminMessage = `New booking by ${nameText} (${mobileText}). Pickup: ${pickupText}, Drop: ${dropText}, Car: ${carText}, Fare: Rs${fareText}`;
 
-    // Send SMS to Admin
     const adminPhone = process.env.ADMIN_PHONE || "91XXXXXXXXXX";
-    const adminMessage = `New booking by ${name} (${mobile}). Pickup: ${pickupDate} ${pickupTime}, Drop: ${dropLocation}, Car: ${carType}, Fare: Rs${totalFare}`;
+    await sendSMS(mobileText, customerMessage);
     await sendSMS(adminPhone, adminMessage);
 
     res.status(201).json({
