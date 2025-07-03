@@ -61,13 +61,14 @@ router.post("/", async (req, res) => {
     const savedBooking = await newBooking.save();
     console.log("✅ Booking saved to MongoDB:", savedBooking);
 
-    // ✅ Send SMS to customer
-    const customerMsg = `Hi ${name}, your booking for ${carType} is confirmed. Fare: ₹${totalFare}. We'll contact you shortly. - ItarsiTaxi`;
-    await sendSMS(customerMsg, [mobile]);
+    // ✅ Send SMS to Customer
+    const customerMessage = `Hi ${name}, your ItarsiTaxi booking is confirmed. Car: ${carType}, Fare: ₹${totalFare}. We'll contact you shortly.`;
+    await sendSMS(mobile, customerMessage);
 
-    // ✅ Send SMS to admin
-    const adminMsg = `🚖 New Booking by ${name}. Car: ${carType}, Fare: ₹${totalFare}, Mobile: ${mobile}`;
-    await sendSMS(adminMsg, [process.env.ADMIN_PHONE]);
+    // ✅ Send SMS to Admin
+    const adminPhone = process.env.ADMIN_PHONE || "7000771918"; // Replace fallback number if needed
+    const adminMsg = `New Booking: ${name} (${mobile}), Car: ${carType}, Fare: ₹${totalFare}, Drop: ${dropLocation}`;
+    await sendSMS(adminPhone, adminMsg);
 
     res.status(201).json({
       success: true,
