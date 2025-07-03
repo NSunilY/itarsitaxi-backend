@@ -6,6 +6,15 @@ const sendSMS = require("../utils/sendSMS");
 
 const safe = (v, fallback = "Not Provided") => (v || "").toString().trim() || fallback;
 
+// ✅ Sanitize all SMS content to remove Unicode characters
+const sanitizeSMS = (text) => {
+  return (text || "")
+    .replace(/[–—]/g, "-")           // Replace en dash/em dash with hyphen
+    .replace(/[₹•“”‘’]/g, "")        // Remove special symbols/quotes
+    .replace(/[^\x00-\x7F]/g, "")    // Remove non-ASCII characters
+    .trim();
+};
+
 router.get("/distance", async (req, res) => {
   const { origin, destination } = req.query;
   if (!origin || !destination) {
@@ -63,18 +72,20 @@ router.post("/", async (req, res) => {
     const savedBooking = await newBooking.save();
     console.log("✅ Booking saved to MongoDB:", savedBooking);
 
-    const nameText = safe(name);
-    const carText = safe(carType);
-    const fareText = safe(totalFare);
-    const pickupText = `${safe(pickupDate)} ${safe(pickupTime)}`;
-    const dropText = safe(dropLocation);
-    const mobileText = safe(mobile);
+    // ✅ Sanitize all variables used in SMS
+    const nameText = sanitizeSMS(safe(name));
+    const carText = sanitizeSMS(safe(carType));
+    const fareText = sanitizeSMS(safe(totalFare));
+    const pickupText = sanitizeSMS(`${safe(pickupDate)} ${safe(pickupTime)}`);
+    const dropText = sanitizeSMS(safe(dropLocation));
+    const mobileText = sanitizeSMS(safe(mobile));
 
-    // ✅ English-only text for SMS (to avoid Unicode)
+    // ✅ Construct clean English SMS messages
     const customerMessage = `Hi ${nameText}, your ItarsiTaxi booking is confirmed. Car: ${carText}, Fare: Rs${fareText}, Pickup: ${pickupText}. Thank you!`;
     const adminMessage = `New booking by ${nameText} (${mobileText}). Pickup: ${pickupText}, Drop: ${dropText}, Car: ${carText}, Fare: Rs${fareText}`;
 
     const adminPhone = process.env.ADMIN_PHONE || "91XXXXXXXXXX";
+
     await sendSMS(mobileText, customerMessage);
     await sendSMS(adminPhone, adminMessage);
 
