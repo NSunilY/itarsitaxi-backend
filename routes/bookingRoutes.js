@@ -4,9 +4,6 @@ const getDistance = require("../utils/getDistance");
 const Booking = require("../models/Booking");
 const sendSMS = require("../utils/sendSMS");
 
-// Helper to clean values (avoids nulls and Unicode issues)
-const clean = (text) => text?.toString().trim() || "N/A";
-
 router.get("/distance", async (req, res) => {
   const { origin, destination } = req.query;
   if (!origin || !destination) {
@@ -64,21 +61,20 @@ router.post("/", async (req, res) => {
     const savedBooking = await newBooking.save();
     console.log("✅ Booking saved to MongoDB:", savedBooking);
 
-    // Clean values for SMS
-    const nameClean = clean(name);
-    const mobileClean = clean(mobile);
-    const carClean = clean(carType);
-    const fareClean = clean(totalFare);
-    const dateTime = `${pickupDate} ${pickupTime}`.trim();
-    const dropClean = clean(dropLocation);
+    /**
+     * ✅ SMS Note:
+     * Messages below must be in plain ENGLISH text only (not Unicode)
+     * Max 150 characters per SMS for Fast2SMS Quick Route (route=q)
+     * Avoid ₹, emojis, Hindi text, or special symbols that trigger Unicode mode
+     */
 
-    // Send short SMS to Customer (under 70 Unicode chars)
-    const customerMessage = `Hi ${nameClean}, ItarsiTaxi confirmed. ${dateTime}, ${carClean}, Rs${fareClean}`;
-    await sendSMS(mobileClean, customerMessage);
+    // Send SMS to Customer
+    const customerMessage = `Hi ${name}, your ItarsiTaxi booking is confirmed. Car: ${carType}, Fare: Rs${totalFare}, Pickup: ${pickupDate} ${pickupTime}. Thank you!`;
+    await sendSMS(mobile, customerMessage);
 
     // Send SMS to Admin
     const adminPhone = process.env.ADMIN_PHONE || "91XXXXXXXXXX";
-    const adminMessage = `Booking: ${nameClean}, ${mobileClean}, Drop: ${dropClean}, Rs${fareClean}`;
+    const adminMessage = `New booking by ${name} (${mobile}). Pickup: ${pickupDate} ${pickupTime}, Drop: ${dropLocation}, Car: ${carType}, Fare: Rs${totalFare}`;
     await sendSMS(adminPhone, adminMessage);
 
     res.status(201).json({
