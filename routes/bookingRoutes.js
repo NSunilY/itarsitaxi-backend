@@ -61,14 +61,14 @@ router.post("/", async (req, res) => {
     const savedBooking = await newBooking.save();
     console.log("✅ Booking saved to MongoDB:", savedBooking);
 
-    // ✅ Send SMS to Customer
-    const customerMessage = `Hi ${name}, your ItarsiTaxi booking is confirmed. Car: ${carType}, Fare: ₹${totalFare}. We'll contact you shortly.`;
-    await sendSMS(mobile, customerMessage);
+// Send SMS to Customer
+const customerMessage = `Hi ${name}, your ItarsiTaxi booking is confirmed. Car: ${carType}, Fare: Rs ${totalFare}, ID: ${savedBooking._id}. Thanks!`;
+await sendSMS(mobile, customerMessage);
 
-    // ✅ Send SMS to Admin
-    const adminPhone = process.env.ADMIN_PHONE || "7000771918"; // Replace fallback number if needed
-    const adminMsg = `New Booking: ${name} (${mobile}), Car: ${carType}, Fare: ₹${totalFare}, Drop: ${dropLocation}`;
-    await sendSMS(adminPhone, adminMsg);
+// Send SMS to Admin
+const adminPhone = process.env.ADMIN_PHONE || "91XXXXXXXXXX"; // fallback if not in .env
+const adminMessage = `New booking: ${name}, ${mobile}, Pickup: ${pickupDate} ${pickupTime}, Drop: ${dropLocation || 'N/A'}, Car: ${carType}, Fare: Rs ${totalFare}`;
+await sendSMS(adminPhone, adminMessage);
 
     res.status(201).json({
       success: true,
