@@ -1,30 +1,22 @@
+// utils/sendSMS.js
 const axios = require('axios');
 
 const sendSMS = async (message, numbers) => {
-  const FAST2SMS_API_KEY = process.env.FAST2SMS_API_KEY;
-
   try {
-    const res = await axios.post(
-      'https://www.fast2sms.com/dev/bulkV2',
-      {
-        route: 'v3',
-        sender_id: 'TXTIND',
+    const res = await axios.post('https://www.fast2sms.com/dev/bulk', null, {
+      params: {
+        authorization: process.env.FAST2SMS_API_KEY,
+        sender_id: 'FSTSMS',
         message,
         language: 'english',
-        numbers,
+        route: 'q', // 'q' is for Quick SMS (Transactional)
+        numbers: numbers.join(','),
       },
-      {
-        headers: {
-          authorization: FAST2SMS_API_KEY,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    });
 
-    console.log('SMS Sent:', res.data);
-    return res.data;
-  } catch (error) {
-    console.error('SMS sending failed:', error.response?.data || error.message);
+    console.log('✅ SMS sent:', res.data);
+  } catch (err) {
+    console.error('❌ SMS sending failed:', err.response?.data || err.message);
   }
 };
 
