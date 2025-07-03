@@ -2,11 +2,10 @@ const express = require("express");
 const router = express.Router();
 const getDistance = require("../utils/getDistance");
 const Booking = require("../models/Booking");
+const sendSMS = require("../utils/sendSMS"); // ✅ Import SMS function
 
-// GET Distance route
 router.get("/distance", async (req, res) => {
   const { origin, destination } = req.query;
-
   if (!origin || !destination) {
     return res.status(400).json({ error: "Both origin and destination are required." });
   }
@@ -20,7 +19,6 @@ router.get("/distance", async (req, res) => {
   }
 });
 
-// ✅ POST /api/bookings — Save booking to DB
 router.post("/", async (req, res) => {
   try {
     console.log("📥 Incoming booking request:", req.body);
@@ -37,10 +35,9 @@ router.post("/", async (req, res) => {
       pickupDate,
       pickupTime,
       tripType,
-      duration
+      duration,
     } = req.body;
 
-    // Validate required fields
     if (!name || !mobile || !paymentMode || !carType || !distance || !totalFare) {
       console.warn("⚠️ Missing required fields");
       return res.status(400).json({ success: false, message: "Missing required fields" });
@@ -63,6 +60,14 @@ router.post("/", async (req, res) => {
 
     const savedBooking = await newBooking.save();
     console.log("✅ Booking saved to MongoDB:", savedBooking);
+
+    // ✅ Send SMS to customer
+    const customerMsg = `Hi ${name}, your booking for ${carType} is confirmed. Fare: ₹${totalFare}. We'll contact you shortly. - ItarsiTaxi`;
+    await sendSMS(customerMsg, [mobile]);
+
+    // ✅ Send SMS to admin
+    const adminMsg = `🚖 New Booking by ${name}. Car: ${carType}, Fare: ₹${totalFare}, Mobile: ${mobile}`;
+    await sendSMS(adminMsg, [process.env.ADMIN_PHONE]);
 
     res.status(201).json({
       success: true,
