@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const bookingRoutes = require('./routes/bookingRoutes');
-const adminRoutes = require('./routes/admin');
+const adminRoutes = require('./routes/adminRoutes'); // ✅ Corrected this line
 const blogRoutes = require('./routes/blogRoutes'); // if you're using blogs
 const distanceRoutes = require('./routes/distance'); // if using distance API
 
@@ -26,9 +26,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/bookings', bookingRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', adminRoutes); // ✅ Uses new adminRoutes.js
 app.use('/api/blogs', blogRoutes);
-app.use('/api/distance', distanceRoutes); // ✅ don't forget this if you're using it
+app.use('/api/distance', distanceRoutes);
 
 // Health Check Route
 app.get('/', (req, res) => {
