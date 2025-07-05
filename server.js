@@ -13,10 +13,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Allow CORS from multiple origins (production + local)
+// ✅ Robust CORS Setup — Handles production & localhost + OPTIONS preflight
 const allowedOrigins = ['https://itarsitaxi.in', 'http://localhost:3000'];
-
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -25,14 +24,17 @@ app.use(cors({
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
-}));
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // ✅ Handle all preflight requests
 
-// ✅ Body parser middlewares
+// ✅ Body parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ API Routes
+// ✅ Routes
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/blogs', blogRoutes);
@@ -46,11 +48,12 @@ app.get('/', (req, res) => {
 // ✅ MongoDB Connection
 const mongoURI = process.env.MONGODB_URI;
 if (!mongoURI) {
-  console.error("❌ MONGODB_URI not found in .env");
+  console.error('❌ MONGODB_URI not found in .env');
   process.exit(1);
 }
 
-mongoose.connect(mongoURI)
+mongoose
+  .connect(mongoURI)
   .then(() => console.log('✅ MongoDB connected successfully'))
   .catch((err) => {
     console.error('❌ MongoDB connection error:', err.message);
