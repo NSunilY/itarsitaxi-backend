@@ -1,21 +1,21 @@
 // routes/adminRoutes.js
-
 const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
 
 // POST /api/admin/login
 router.post("/login", (req, res) => {
-  const { username, password } = req.body;
+  const { adminId, adminPassword } = req.body;
 
-  // Match against .env
   if (
-    username === process.env.ADMIN_ID &&
-    password === process.env.ADMIN_PASSWORD
+    adminId === process.env.ADMIN_ID &&
+    adminPassword === process.env.ADMIN_PASSWORD
   ) {
-    const token = jwt.sign({ username }, process.env.JWT_SECRET || "fallback_secret", {
-      expiresIn: "1d",
-    });
+    const token = jwt.sign(
+      { adminId },
+      process.env.JWT_SECRET || "fallback_secret",
+      { expiresIn: "1d" }
+    );
 
     return res.json({ success: true, token });
   }
