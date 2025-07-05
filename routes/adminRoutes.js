@@ -2,6 +2,7 @@
 const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
+const Booking = require("../models/Booking");
 
 // ✅ Middleware to verify token
 const verifyToken = (req, res, next) => {
@@ -29,17 +30,69 @@ router.post("/login", (req, res) => {
       process.env.JWT_SECRET || "fallback_secret",
       { expiresIn: "1d" }
     );
-
     return res.json({ success: true, token });
   }
 
   res.status(401).json({ success: false, message: "Invalid credentials" });
 });
 
-// ✅ Protected route example
+// ✅ GET /api/admin/bookings — Protected route
 router.get("/bookings", verifyToken, async (req, res) => {
-  // Add your protected logic here
-  res.json({ message: "You are authenticated", admin: req.admin });
+  try {
+    const bookings = await Booking.find().sort({ createdAt: -1 });
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const summary = {
+      total: bookings.length,
+      today: bookings.filter(b => new Date(b.createdAt) >= today).length,
+      revenue: bookings.reduce((acc, b) => acc + (b.totalFare || 0), 0),
+      byCarType: [],
+    };
+
+    const countByType = {};
+    bookings.forEach((b) => {
+      const type = b.carType || "Unknown";
+      countByType[type] = (countByType[type] || 0) + 1;
+    });
+
+    summary.byCarType = Object.entries(countByType).map(([type, count]) => ({
+      type,
+      count,
+    }));
+
+    res.json({ bookings, summary });
+  } catch (err) {
+    console.error("❌ Error in /admin/bookings:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ✅ Mark booking as completed
+router.put("/bookings/:id/complete", verifyToken, async (req, res) => {
+  try {
+    const updated = await Booking.findByIdAndUpdate(
+      req.params.id,
+      { status: "completed" },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ success: false, message: "Booking not found" });
+    res.json({ success: true, booking: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Failed to update booking" });
+  }
+});
+
+// ✅ Delete a booking
+router.delete("/bookings/:id", verifyToken, async (req, res) => {
+  try {
+    const deleted = await Booking.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, message: "Booking not found" });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Failed to delete booking" });
+  }
 });
 
 module.exports = router;
