@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const { storage } = require('../config/cloudinary'); // ✅ Cloudinary Multer config
+const { storage } = require('../config/cloudinary');
 const upload = multer({ storage });
 
 const Blog = require('../models/Blog');
@@ -44,13 +44,13 @@ router.get('/:id', async (req, res) => {
 router.post('/add', upload.single('image'), async (req, res) => {
   try {
     const { title, excerpt, content } = req.body;
-    const imageUrl = req.file?.path || '';
+    const image = req.file?.path || '';
 
-    if (!title || !excerpt || !content || !imageUrl) {
+    if (!title || !excerpt || !content || !image) {
       return res.status(400).json({ error: 'All fields including image are required' });
     }
 
-    const blog = new Blog({ title, excerpt, content, imageUrl });
+    const blog = new Blog({ title, excerpt, content, image }); // ✅ Match schema
     await blog.save();
 
     res.status(201).json({ message: 'Blog created successfully', blog });
