@@ -3,12 +3,16 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+
+// Load environment variables
+dotenv.config();
+
+// Route imports
 const bookingRoutes = require('./routes/bookingRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const blogRoutes = require('./routes/blogRoutes');
 const distanceRoutes = require('./routes/distance');
-
-dotenv.config();
+const testimonialRoutes = require('./routes/testimonialRoutes'); // ✅ NEW
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -41,6 +45,7 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/distance', distanceRoutes);
+app.use('/api/testimonials', testimonialRoutes); // ✅ NEW
 
 // ✅ Root Health Check
 app.get('/', (req, res) => {
