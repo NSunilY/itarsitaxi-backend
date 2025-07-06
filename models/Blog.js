@@ -1,3 +1,4 @@
+// models/Blog.js
 const mongoose = require('mongoose');
 
 const blogSchema = new mongoose.Schema(
@@ -15,12 +16,13 @@ const blogSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    imageUrl: {
+    image: {
       type: String,
+      required: true,
     },
   },
   {
-    timestamps: true, // adds createdAt and updatedAt automatically
+    timestamps: true,
   }
 );
 
