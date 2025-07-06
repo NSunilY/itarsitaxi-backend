@@ -1,9 +1,10 @@
 const express = require('express');
-const Blog = require('../models/Blog');
 const router = express.Router();
 const multer = require('multer');
-const { storage } = require('../config/cloudinary'); // ✅ Cloudinary setup
+const { storage } = require('../config/cloudinary'); // ✅ Cloudinary Multer config
 const upload = multer({ storage });
+
+const Blog = require('../models/Blog');
 
 // ✅ GET all blogs with pagination
 router.get('/', async (req, res) => {
@@ -39,24 +40,23 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ✅ POST - Add new blog with image upload
+// ✅ POST - Add blog with image upload
 router.post('/add', upload.single('image'), async (req, res) => {
   try {
     const { title, excerpt, content } = req.body;
+    const imageUrl = req.file?.path || '';
 
-    if (!title || !excerpt || !content || !req.file) {
+    if (!title || !excerpt || !content || !imageUrl) {
       return res.status(400).json({ error: 'All fields including image are required' });
     }
 
-    const image = req.file.path || req.file.secure_url || '';
-
-    const blog = new Blog({ title, excerpt, content, image });
+    const blog = new Blog({ title, excerpt, content, imageUrl });
     await blog.save();
 
     res.status(201).json({ message: 'Blog created successfully', blog });
   } catch (err) {
     console.error('❌ Blog creation error:', err.message);
-    res.status(400).json({ error: 'Failed to create blog. Image upload may have failed.' });
+    res.status(500).json({ error: 'Failed to create blog. Check image format or server logs.' });
   }
 });
 
