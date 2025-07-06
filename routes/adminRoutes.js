@@ -17,7 +17,7 @@ const verifyToken = (req, res, next) => {
   });
 };
 
-// ✅ Login route
+// ✅ Login route — now supports multiple devices/sessions
 router.post("/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -26,7 +26,10 @@ router.post("/login", (req, res) => {
     password === process.env.ADMIN_PASSWORD
   ) {
     const token = jwt.sign(
-      { username },
+      {
+        username,
+        loginTime: Date.now(), // makes each token unique
+      },
       process.env.JWT_SECRET || "fallback_secret",
       { expiresIn: "1d" }
     );
