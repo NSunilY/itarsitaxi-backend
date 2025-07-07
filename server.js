@@ -3,11 +3,10 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const cookieParser = require('cookie-parser'); // ✅ Add this
 
-// Load environment variables
 dotenv.config();
 
-// Route imports
 const bookingRoutes = require('./routes/bookingRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const blogRoutes = require('./routes/blogRoutes');
@@ -18,7 +17,13 @@ const driverRoutes = require('./routes/driverRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Allowed Origins for CORS
+// ✅ Trust proxy (important for HTTPS cookies on Render)
+app.set('trust proxy', 1);
+
+// ✅ Cookie parser
+app.use(cookieParser());
+
+// ✅ Allowed Origins
 const allowedOrigins = ['http://localhost:3000', 'https://itarsitaxi.in'];
 
 // ✅ CORS Middleware
@@ -33,7 +38,7 @@ app.use(cors({
   credentials: true,
 }));
 
-// ✅ Optional manual fallback CORS headers
+// ✅ Optional fallback headers (important for preflight requests)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
@@ -42,6 +47,7 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
@@ -49,7 +55,7 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ MongoDB Connection
+// ✅ MongoDB connection
 const mongoURI = process.env.MONGODB_URI;
 if (!mongoURI) {
   console.error('❌ MONGODB_URI not set in .env');
@@ -62,7 +68,7 @@ mongoose.connect(mongoURI)
     process.exit(1);
   });
 
-// ✅ Routes
+// ✅ API Routes
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/blogs', blogRoutes);
