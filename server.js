@@ -17,11 +17,20 @@ const testimonialRoutes = require('./routes/testimonialRoutes'); // ✅ NEW
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ CORS Setup
+// ✅ CORS Setup for Multiple Devices and Live Domain
 app.use(cors({
   origin: ['http://localhost:3000', 'https://itarsitaxi.in'],
   credentials: true,
 }));
+
+// ✅ Optional: Add manual fallback headers for CORS (optional but safe)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://itarsitaxi.in');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  next();
+});
 
 // ✅ Body Parsers
 app.use(express.json());
@@ -42,7 +51,7 @@ mongoose.connect(mongoURI)
 
 // ✅ API Routes
 app.use('/api/bookings', bookingRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', adminRoutes); // 🔐 Supports multiple device login with stateless JWT
 app.use('/api/blogs', blogRoutes);
 app.use('/api/distance', distanceRoutes);
 app.use('/api/testimonials', testimonialRoutes); // ✅ NEW
