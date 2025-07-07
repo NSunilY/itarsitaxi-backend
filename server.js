@@ -12,28 +12,40 @@ const bookingRoutes = require('./routes/bookingRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const blogRoutes = require('./routes/blogRoutes');
 const distanceRoutes = require('./routes/distance');
-const testimonialRoutes = require('./routes/testimonialRoutes'); // ✅ NEW
-const driverRoutes = require('./routes/driverRoutes'); // ✅ NEW: Driver Panel
+const testimonialRoutes = require('./routes/testimonialRoutes');
+const driverRoutes = require('./routes/driverRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ CORS Setup for Multiple Devices and Live Domain
+// ✅ Allowed Origins for CORS
+const allowedOrigins = ['http://localhost:3000', 'https://itarsitaxi.in'];
+
+// ✅ CORS Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://itarsitaxi.in'],
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 
-// ✅ Optional fallback headers for CORS
+// ✅ Optional manual fallback CORS headers
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://itarsitaxi.in');
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   next();
 });
 
-// ✅ Body Parsers
+// ✅ Body parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -50,20 +62,20 @@ mongoose.connect(mongoURI)
     process.exit(1);
   });
 
-// ✅ API Routes
+// ✅ Routes
 app.use('/api/bookings', bookingRoutes);
-app.use('/api/admin', adminRoutes); // 🔐 Admin login
+app.use('/api/admin', adminRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/distance', distanceRoutes);
-app.use('/api/testimonials', testimonialRoutes); // ✅ Testimonials
-app.use('/api/drivers', driverRoutes); // ✅ Driver Panel
+app.use('/api/testimonials', testimonialRoutes);
+app.use('/api/drivers', driverRoutes);
 
-// ✅ Root Health Check
+// ✅ Health check
 app.get('/', (req, res) => {
   res.send('✅ ItarsiTaxi Backend is Live');
 });
 
-// ✅ Start Server
+// ✅ Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
