@@ -14,7 +14,13 @@ const driverSchema = new mongoose.Schema({
   vehicleNumber: { type: String, required: true },
   vehicleMakeModel: { type: String, required: true },
   insuranceExpiry: { type: Date, required: true },
-  pucExpiry: { type: Date, required: true }
+  pucExpiry: { type: Date, required: true },
+
+  // ✅ New fields for uploaded documents (Cloudinary URLs)
+  rcUrl: { type: String },
+  dlUrl: { type: String },
+  insuranceUrl: { type: String },
+  pucUrl: { type: String }
 }, {
   timestamps: true
 });

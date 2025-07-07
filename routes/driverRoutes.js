@@ -3,7 +3,11 @@ const express = require('express');
 const router = express.Router();
 const Driver = require('../models/Driver');
 
-// Get all drivers
+const multer = require('multer');
+const { storage } = require('../config/cloudinary');
+const upload = multer({ storage });
+
+// ✅ Get all drivers
 router.get('/', async (req, res) => {
   try {
     const drivers = await Driver.find().sort({ createdAt: -1 });
@@ -13,7 +17,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Add new driver
+// ✅ Add new driver
 router.post('/', async (req, res) => {
   try {
     const newDriver = new Driver(req.body);
@@ -25,7 +29,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Update driver
+// ✅ Update driver
 router.put('/:id', async (req, res) => {
   try {
     const updatedDriver = await Driver.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -35,13 +39,35 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Delete driver
+// ✅ Delete driver
 router.delete('/:id', async (req, res) => {
   try {
     await Driver.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete driver.' });
+  }
+});
+
+// ✅ Upload documents (RC, DL, Insurance, PUC)
+router.post('/:id/upload', upload.fields([
+  { name: 'rc' },
+  { name: 'dl' },
+  { name: 'insurance' },
+  { name: 'puc' }
+]), async (req, res) => {
+  try {
+    const updates = {};
+    if (req.files.rc) updates.rcUrl = req.files.rc[0].path;
+    if (req.files.dl) updates.dlUrl = req.files.dl[0].path;
+    if (req.files.insurance) updates.insuranceUrl = req.files.insurance[0].path;
+    if (req.files.puc) updates.pucUrl = req.files.puc[0].path;
+
+    const driver = await Driver.findByIdAndUpdate(req.params.id, updates, { new: true });
+    res.json(driver);
+  } catch (err) {
+    console.error('Upload error:', err.message);
+    res.status(500).json({ error: 'Upload failed' });
   }
 });
 
