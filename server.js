@@ -13,6 +13,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const blogRoutes = require('./routes/blogRoutes');
 const distanceRoutes = require('./routes/distance');
 const testimonialRoutes = require('./routes/testimonialRoutes'); // ✅ NEW
+const driverRoutes = require('./routes/driverRoutes'); // ✅ NEW: Driver Panel
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -23,7 +24,7 @@ app.use(cors({
   credentials: true,
 }));
 
-// ✅ Optional: Add manual fallback headers for CORS (optional but safe)
+// ✅ Optional fallback headers for CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', 'https://itarsitaxi.in');
   res.header('Access-Control-Allow-Credentials', 'true');
@@ -51,10 +52,11 @@ mongoose.connect(mongoURI)
 
 // ✅ API Routes
 app.use('/api/bookings', bookingRoutes);
-app.use('/api/admin', adminRoutes); // 🔐 Supports multiple device login with stateless JWT
+app.use('/api/admin', adminRoutes); // 🔐 Admin login
 app.use('/api/blogs', blogRoutes);
 app.use('/api/distance', distanceRoutes);
-app.use('/api/testimonials', testimonialRoutes); // ✅ NEW
+app.use('/api/testimonials', testimonialRoutes); // ✅ Testimonials
+app.use('/api/drivers', driverRoutes); // ✅ Driver Panel
 
 // ✅ Root Health Check
 app.get('/', (req, res) => {
