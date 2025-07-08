@@ -17,7 +17,7 @@ const driverRoutes = require('./routes/driverRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Trust proxy (important for secure cookies on Render or any proxy)
+// ✅ Trust proxy (for Render or HTTPS)
 app.set('trust proxy', 1);
 
 // ✅ Middleware
@@ -25,14 +25,14 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ Allowed Origins for CORS
+// ✅ Allowed Origins
 const allowedOrigins = [
   'http://localhost:3000',
   'https://itarsitaxi.in',
   'https://www.itarsitaxi.in'
 ];
 
-// ✅ CORS Configuration (allows cookies to pass through)
+// ✅ CORS (for Bearer token — NOT using cookies)
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -42,23 +42,24 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true,
+  credentials: false, // ❌ Not using cookies for auth
 }));
 
-// ✅ Fallback headers for OPTIONS/preflight (important for older browsers)
+// ✅ Fallback Headers for preflight (remove credentials)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
   }
-  res.header('Access-Control-Allow-Credentials', 'true');
+  // ❌ DO NOT include credentials here
+  // res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
-// ✅ Connect to MongoDB
+// ✅ MongoDB Connection
 const mongoURI = process.env.MONGODB_URI;
 if (!mongoURI) {
   console.error('❌ MONGODB_URI not set in .env');
