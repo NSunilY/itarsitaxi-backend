@@ -1,12 +1,14 @@
 // routes/adminRoutes.js
-const express = require("express");
+const express = require('express');
+const jwt = require('jsonwebtoken');
 const router = express.Router();
-const jwt = require("jsonwebtoken");
-const Booking = require("../models/Booking");
+const Booking = require('../models/Booking');
 
-// ✅ Middleware to verify token from cookie
+// ✅ Middleware to verify token from Authorization header
 const verifyToken = (req, res, next) => {
-  const token = req.cookies.admin_token;
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(" ")[1];
+
   if (!token) return res.status(401).json({ message: "No token provided" });
 
   jwt.verify(token, process.env.JWT_SECRET || "fallback_secret", (err, decoded) => {
@@ -16,7 +18,7 @@ const verifyToken = (req, res, next) => {
   });
 };
 
-// ✅ Login route — now sets secure cookie
+// ✅ Admin login route
 router.post("/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -25,84 +27,70 @@ router.post("/login", (req, res) => {
     password === process.env.ADMIN_PASSWORD
   ) {
     const token = jwt.sign(
-      {
-        username,
-        loginTime: Date.now(),
-      },
+      { username, loginTime: Date.now() },
       process.env.JWT_SECRET || "fallback_secret",
       { expiresIn: "1d" }
     );
 
-    // ✅ Set secure cookie
-    res.cookie("admin_token", token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 24 * 60 * 60 * 1000,
-    });
-
-    return res.json({ success: true });
+    return res.json({ success: true, token }); // ✅ Return token in response
   }
 
   res.status(401).json({ success: false, message: "Invalid credentials" });
 });
 
-// ✅ GET /api/admin/bookings — Protected route
+// ✅ Get all bookings (protected)
 router.get("/bookings", verifyToken, async (req, res) => {
   try {
     const bookings = await Booking.find().sort({ createdAt: -1 });
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
+    // Summary
     const summary = {
       total: bookings.length,
-      today: bookings.filter(b => new Date(b.createdAt) >= today).length,
+      today: bookings.filter(b => new Date(b.createdAt).toDateString() === new Date().toDateString()).length,
       revenue: bookings.reduce((acc, b) => acc + (b.totalFare || 0), 0),
       byCarType: [],
     };
 
-    const countByType = {};
-    bookings.forEach((b) => {
-      const type = b.carType || "Unknown";
-      countByType[type] = (countByType[type] || 0) + 1;
+    const carTypeMap = {};
+    bookings.forEach(b => {
+      if (b.carType) {
+        carTypeMap[b.carType] = (carTypeMap[b.carType] || 0) + 1;
+      }
     });
 
-    summary.byCarType = Object.entries(countByType).map(([type, count]) => ({
+    summary.byCarType = Object.keys(carTypeMap).map(type => ({
       type,
-      count,
+      count: carTypeMap[type],
     }));
 
     res.json({ bookings, summary });
   } catch (err) {
-    console.error("❌ Error in /admin/bookings:", err.message);
-    res.status(500).json({ message: "Server error" });
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch bookings" });
   }
 });
 
-// ✅ Mark booking as completed
+// ✅ Mark booking as completed (protected)
 router.put("/bookings/:id/complete", verifyToken, async (req, res) => {
   try {
-    const updated = await Booking.findByIdAndUpdate(
-      req.params.id,
-      { status: "completed" },
-      { new: true }
-    );
-    if (!updated) return res.status(404).json({ success: false, message: "Booking not found" });
-    res.json({ success: true, booking: updated });
+    const booking = await Booking.findByIdAndUpdate(req.params.id, { status: 'completed' }, { new: true });
+    if (!booking) return res.status(404).json({ success: false });
+    res.json({ success: true, booking });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Failed to update booking" });
+    console.error(err);
+    res.status(500).json({ success: false });
   }
 });
 
-// ✅ Delete a booking
+// ✅ Delete a booking (protected)
 router.delete("/bookings/:id", verifyToken, async (req, res) => {
   try {
     const deleted = await Booking.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ success: false, message: "Booking not found" });
+    if (!deleted) return res.status(404).json({ success: false });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Failed to delete booking" });
+    console.error(err);
+    res.status(500).json({ success: false });
   }
 });
 
