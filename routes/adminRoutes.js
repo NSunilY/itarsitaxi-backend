@@ -4,12 +4,11 @@ const router = express.Router();
 const jwt = require("jsonwebtoken");
 const Booking = require("../models/Booking");
 
-// ✅ Middleware to verify token
+// ✅ Middleware to verify token from cookie
 const verifyToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ message: "No token provided" });
+  const token = req.cookies.admin_token;
+  if (!token) return res.status(401).json({ message: "No token provided" });
 
-  const token = authHeader.split(" ")[1];
   jwt.verify(token, process.env.JWT_SECRET || "fallback_secret", (err, decoded) => {
     if (err) return res.status(403).json({ message: "Invalid or expired token" });
     req.admin = decoded;
@@ -17,7 +16,7 @@ const verifyToken = (req, res, next) => {
   });
 };
 
-// ✅ Login route — now supports multiple devices/sessions
+// ✅ Login route — now sets secure cookie
 router.post("/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -28,12 +27,21 @@ router.post("/login", (req, res) => {
     const token = jwt.sign(
       {
         username,
-        loginTime: Date.now(), // makes each token unique
+        loginTime: Date.now(),
       },
       process.env.JWT_SECRET || "fallback_secret",
       { expiresIn: "1d" }
     );
-    return res.json({ success: true, token });
+
+    // ✅ Set secure cookie
+    res.cookie("admin_token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "None",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({ success: true });
   }
 
   res.status(401).json({ success: false, message: "Invalid credentials" });

@@ -3,7 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const cookieParser = require('cookie-parser'); // ✅ Add this
+const cookieParser = require('cookie-parser');
 
 dotenv.config();
 
@@ -17,28 +17,35 @@ const driverRoutes = require('./routes/driverRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Trust proxy (important for HTTPS cookies on Render)
+// ✅ Trust proxy (important for secure cookies on Render or any proxy)
 app.set('trust proxy', 1);
 
-// ✅ Cookie parser
+// ✅ Middleware
 app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// ✅ Allowed Origins
-const allowedOrigins = ['http://localhost:3000', 'https://itarsitaxi.in'];
+// ✅ Allowed Origins for CORS
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://itarsitaxi.in',
+  'https://www.itarsitaxi.in'
+];
 
-// ✅ CORS Middleware
+// ✅ CORS Configuration (allows cookies to pass through)
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.log(`❌ CORS rejected for origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
 }));
 
-// ✅ Optional fallback headers (important for preflight requests)
+// ✅ Fallback headers for OPTIONS/preflight (important for older browsers)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
@@ -51,11 +58,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ Body parsers
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// ✅ MongoDB connection
+// ✅ Connect to MongoDB
 const mongoURI = process.env.MONGODB_URI;
 if (!mongoURI) {
   console.error('❌ MONGODB_URI not set in .env');
