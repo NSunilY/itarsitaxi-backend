@@ -85,6 +85,11 @@ app.get('/', (req, res) => {
   res.send('✅ ItarsiTaxi Backend is Live');
 });
 
+// ✅ Add this ping route (for uptime monitor)
+app.get('/api/ping', (req, res) => {
+  res.status(200).send('pong');
+});
+
 // ✅ Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
