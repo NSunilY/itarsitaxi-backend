@@ -13,6 +13,7 @@ const blogRoutes = require('./routes/blogRoutes');
 const distanceRoutes = require('./routes/distance');
 const testimonialRoutes = require('./routes/testimonialRoutes');
 const driverRoutes = require('./routes/driverRoutes');
+const paymentRoutes = require('./routes/paymentRoutes'); // ✅ NEW
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -42,17 +43,15 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: false, // ❌ Not using cookies for auth
+  credentials: false,
 }));
 
-// ✅ Fallback Headers for preflight (remove credentials)
+// ✅ Fallback Headers for preflight
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
   }
-  // ❌ DO NOT include credentials here
-  // res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -79,13 +78,13 @@ app.use('/api/blogs', blogRoutes);
 app.use('/api/distance', distanceRoutes);
 app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/drivers', driverRoutes);
+app.use('/api/payment', paymentRoutes); // ✅ ADD THIS LINE
 
 // ✅ Health check
 app.get('/', (req, res) => {
   res.send('✅ ItarsiTaxi Backend is Live');
 });
 
-// ✅ Add this ping route (for uptime monitor)
 app.get('/api/ping', (req, res) => {
   res.status(200).send('pong');
 });
