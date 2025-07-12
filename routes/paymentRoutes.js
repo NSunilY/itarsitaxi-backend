@@ -7,12 +7,12 @@ const Booking = require('../models/Booking');
 
 const tempBookingStore = {}; // Memory store (cleared on restart)
 
-// ✅ Production PhonePe config
 const phonepeConfig = {
   merchantId: process.env.PHONEPE_MERCHANT_ID,
   saltKey: process.env.PHONEPE_SALT_KEY,
   saltIndex: process.env.PHONEPE_SALT_INDEX || '1',
   baseUrl: 'https://api.phonepe.com/apis/pg', // ✅ Production URL
+  authUrl: 'https://api.phonepe.com/apis/identity-manager/v1/oauth/token',
   callbackUrl: 'https://itarsitaxi.in/payment-success',
 };
 
@@ -30,13 +30,11 @@ router.post('/phonepe/initiate', async (req, res) => {
     merchantId: phonepeConfig.merchantId,
     merchantTransactionId: orderId,
     merchantUserId: mobile || 'GUEST_USER',
-    amount: amount * 100, // in paisa
+    amount: amount * 100,
     redirectUrl: phonepeConfig.callbackUrl,
     redirectMode: 'POST',
     callbackUrl: phonepeConfig.callbackUrl,
-    paymentInstrument: {
-      type: 'PAY_PAGE',
-    },
+    paymentInstrument: { type: 'PAY_PAGE' },
   };
 
   const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64');
@@ -45,7 +43,7 @@ router.post('/phonepe/initiate', async (req, res) => {
     .update(base64Payload + '/checkout/v2/pay' + phonepeConfig.saltKey)
     .digest('hex');
 
-  // ✅ Debug Logs
+  // ✅ Debug
   console.log('📤 Initiating PhonePe payment...');
   console.log('🔗 Endpoint:', `${phonepeConfig.baseUrl}/checkout/v2/pay`);
   console.log('📦 Payload:', payload);
@@ -53,6 +51,29 @@ router.post('/phonepe/initiate', async (req, res) => {
   console.log('🔐 X-VERIFY:', `${checksum}###${phonepeConfig.saltIndex}`);
 
   try {
+    // ✅ Step 1: Fetch Bearer token
+    const tokenRes = await axios.post(
+      phonepeConfig.authUrl,
+      { merchantId: phonepeConfig.merchantId },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        auth: {
+          username: phonepeConfig.merchantId,
+          password: phonepeConfig.saltKey,
+        },
+      }
+    );
+
+    const token = tokenRes.data?.data?.token;
+
+    if (!token) {
+      console.error('❌ Failed to get auth token:', tokenRes.data);
+      return res.status(500).json({ success: false, message: 'Authorization failed' });
+    }
+
+    // ✅ Step 2: Initiate Payment
     const response = await axios.post(
       `${phonepeConfig.baseUrl}/checkout/v2/pay`,
       { request: base64Payload },
@@ -60,6 +81,7 @@ router.post('/phonepe/initiate', async (req, res) => {
         headers: {
           'Content-Type': 'application/json',
           'X-VERIFY': `${checksum}###${phonepeConfig.saltIndex}`,
+          'Authorization': `Bearer ${token}`,
         },
       }
     );
@@ -78,23 +100,19 @@ router.post('/phonepe/initiate', async (req, res) => {
     console.error('❌ PhonePe responded with failure:', resData);
     res.status(500).json({ success: false, message: 'PhonePe error', data: resData });
   } catch (err) {
-    console.error('❌ PhonePe Payment Error');
-
+    console.error('❌ Final PhonePe Payment Error');
     if (err.response) {
       console.error('🔴 Response Data:', err.response.data);
       console.error('🔴 Status:', err.response.status);
       console.error('🔴 Headers:', err.response.headers);
-    } else if (err.request) {
-      console.error('🔴 No response received from PhonePe:', err.request);
     } else {
       console.error('🔴 Error:', err.message);
     }
-
     res.status(500).json({ success: false, message: 'Payment initiation failed' });
   }
 });
 
-// 🟢 Step 2: Payment Callback
+// 🟢 Step 2: Callback Handler
 router.post('/phonepe/callback', async (req, res) => {
   const { transactionId, merchantTransactionId, code } = req.body;
 
