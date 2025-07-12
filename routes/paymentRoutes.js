@@ -52,19 +52,16 @@ router.post('/phonepe/initiate', async (req, res) => {
 
   try {
     // ✅ Step 1: Fetch Bearer token
-    const tokenRes = await axios.post(
-      phonepeConfig.authUrl,
-      { merchantId: phonepeConfig.merchantId },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        auth: {
-          username: phonepeConfig.merchantId,
-          password: phonepeConfig.saltKey,
-        },
-      }
-    );
+const tokenRes = await axios.post(
+  phonepeConfig.authUrl,
+  'grant_type=client_credentials',
+  {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: 'Basic ' + Buffer.from(`${phonepeConfig.merchantId}:${phonepeConfig.saltKey}`).toString('base64'),
+    },
+  }
+);
 
     const token = tokenRes.data?.data?.token;
 
