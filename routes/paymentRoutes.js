@@ -44,12 +44,11 @@ router.post('/phonepe/initiate', async (req, res) => {
     await tempBooking.save();
 
     // ✅ Setup request
-    const request = StandardCheckoutPayRequest.builder()
-      .merchantOrderId(merchantOrderId)
-      .amount(amount * 100)
-      .redirectUrl(process.env.PHONEPE_REDIRECT_URL || 'https://itarsitaxi.in/api/payment/phonepe/callback')
-      .redirectMode('POST')
-      .build();
+const request = StandardCheckoutPayRequest.builder()
+  .merchantOrderId(merchantOrderId)
+  .amount(amount * 100)
+  .redirectUrl(process.env.PHONEPE_REDIRECT_URL || 'https://itarsitaxi.in/payment-success')
+  .build();
 
     const response = await client.pay(request);
     const redirectUrl = response.redirectUrl;
