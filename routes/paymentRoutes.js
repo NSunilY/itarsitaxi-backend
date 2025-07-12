@@ -1,4 +1,4 @@
-// routes/paymentRoutes.js (Updated for PhonePe SDK)
+// routes/paymentRoutes.js
 const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
@@ -19,7 +19,7 @@ const client = StandardCheckoutClient.getInstance(
 
 const tempBookingStore = {}; // For holding temporary booking data
 
-// 🟢 Initiate Payment
+// 🟢 INITIATE PhonePe Payment
 router.post('/phonepe/initiate', async (req, res) => {
   const { amount, mobile, bookingData } = req.body;
 
@@ -49,7 +49,7 @@ router.post('/phonepe/initiate', async (req, res) => {
   }
 });
 
-// 🟢 Callback Handling
+// 🟢 CALLBACK after PhonePe Payment
 router.post('/phonepe/callback', async (req, res) => {
   const { transactionId, merchantOrderId, code } = req.body;
 
@@ -84,6 +84,32 @@ router.post('/phonepe/callback', async (req, res) => {
   } catch (err) {
     console.error('❌ DB Save Error:', err);
     res.status(500).send('Booking failed. Please contact support.');
+  }
+});
+
+// 🟢 NEW: Cash on Arrival Booking Route
+router.post('/cash-booking', async (req, res) => {
+  const bookingData = req.body;
+
+  if (!bookingData || !bookingData.name || !bookingData.mobile) {
+    return res.status(400).json({ success: false, message: 'Invalid booking data' });
+  }
+
+  try {
+    const newBooking = new Booking({
+      ...bookingData,
+      paymentStatus: 'Cash on Arrival',
+    });
+
+    await newBooking.save();
+
+    const smsText = `Dear ${newBooking.name}, your booking is confirmed (Cash on Arrival).\nFare: ₹${newBooking.totalFare}.\nThanks for choosing ItarsiTaxi.in!`;
+    await sendSMS(newBooking.mobile, smsText);
+
+    res.status(200).json({ success: true, message: 'Booking confirmed', bookingId: newBooking._id });
+  } catch (error) {
+    console.error('❌ Cash Booking Error:', error);
+    res.status(500).json({ success: false, message: 'Booking failed' });
   }
 });
 
