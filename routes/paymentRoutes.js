@@ -2,11 +2,11 @@
 const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
-const qs = require('qs'); // ✅ For URL-encoded auth body
+const qs = require('qs'); // For x-www-form-urlencoded
 const router = express.Router();
 const Booking = require('../models/Booking');
 
-const tempBookingStore = {}; // Memory store (cleared on restart)
+const tempBookingStore = {}; // Memory-based cache
 
 // ✅ PhonePe Production Config
 const phonepeConfig = {
@@ -19,7 +19,7 @@ const phonepeConfig = {
   callbackUrl: 'https://itarsitaxi.in/payment-success',
 };
 
-// ✅ Fetch Bearer Token using x-www-form-urlencoded
+// ✅ Token Fetch using client credentials
 async function fetchAccessToken() {
   try {
     const body = qs.stringify({ grant_type: 'client_credentials' });
@@ -30,7 +30,8 @@ async function fetchAccessToken() {
       {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          Authorization: 'Basic ' +
+          Authorization:
+            'Basic ' +
             Buffer.from(`${phonepeConfig.clientId}:${phonepeConfig.clientSecret}`).toString('base64'),
         },
       }
@@ -43,7 +44,7 @@ async function fetchAccessToken() {
   }
 }
 
-// 🟢 Step 1: Initiate Payment
+// 🟢 Step 1: Payment Initiation
 router.post('/phonepe/initiate', async (req, res) => {
   const { amount, mobile, bookingData } = req.body;
 
@@ -110,19 +111,18 @@ router.post('/phonepe/initiate', async (req, res) => {
   }
 });
 
-// 🟢 Step 2: Callback Handler
+// 🟢 Step 2: Callback after Payment
 router.post('/phonepe/callback', async (req, res) => {
   const { transactionId, merchantTransactionId, code } = req.body;
 
   console.log('📩 PhonePe callback received:', req.body);
 
   if (code !== 'PAYMENT_SUCCESS') {
-    console.warn(`❌ Payment failed or cancelled for transaction: ${merchantTransactionId}`);
+    console.warn(`❌ Payment failed/cancelled for transaction: ${merchantTransactionId}`);
     return res.redirect('/payment-failed');
   }
 
   const bookingData = tempBookingStore[merchantTransactionId];
-
   if (!bookingData) {
     return res.status(400).send('⚠️ No booking data found for this transaction');
   }
@@ -141,7 +141,7 @@ router.post('/phonepe/callback', async (req, res) => {
       `/thank-you?name=${bookingData.name}&carType=${bookingData.carType}&fare=${bookingData.totalFare}`
     );
   } catch (err) {
-    console.error('❌ DB save error:', err);
+    console.error('❌ DB Save Error:', err);
     res.status(500).send('Booking failed. Please contact support.');
   }
 });
