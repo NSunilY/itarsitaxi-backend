@@ -2,6 +2,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
+const qs = require('qs'); // ✅ For URL-encoded auth body
 const router = express.Router();
 const Booking = require('../models/Booking');
 
@@ -18,18 +19,19 @@ const phonepeConfig = {
   callbackUrl: 'https://itarsitaxi.in/payment-success',
 };
 
-// ✅ Fetch Bearer Token using client_id & client_secret
+// ✅ Fetch Bearer Token using x-www-form-urlencoded
 async function fetchAccessToken() {
   try {
+    const body = qs.stringify({ grant_type: 'client_credentials' });
+
     const response = await axios.post(
       `${phonepeConfig.baseUrl}/apis/identity-manager/v1/oauth/token`,
-      {
-        clientId: phonepeConfig.clientId,
-        clientSecret: phonepeConfig.clientSecret,
-      },
+      body,
       {
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: 'Basic ' +
+            Buffer.from(`${phonepeConfig.clientId}:${phonepeConfig.clientSecret}`).toString('base64'),
         },
       }
     );
