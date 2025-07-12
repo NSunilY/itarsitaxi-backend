@@ -78,7 +78,7 @@ app.use('/api/blogs', blogRoutes);
 app.use('/api/distance', distanceRoutes);
 app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/drivers', driverRoutes);
-app.use('/api/payment', paymentRoutes); // ✅ ADD THIS LINE
+app.use('/api/payment', paymentRoutes); // ✅ Payment route
 
 // ✅ Health check
 app.get('/', (req, res) => {
@@ -87,6 +87,17 @@ app.get('/', (req, res) => {
 
 app.get('/api/ping', (req, res) => {
   res.status(200).send('pong');
+});
+
+// ✅ TEMP DEBUG ROUTE to check env values
+app.get('/api/debug-env', (req, res) => {
+  res.json({
+    PHONEPE_CLIENT_ID: process.env.PHONEPE_CLIENT_ID || '❌ MISSING',
+    PHONEPE_CLIENT_SECRET: process.env.PHONEPE_CLIENT_SECRET ? '✅ PRESENT' : '❌ MISSING',
+    PHONEPE_MERCHANT_ID: process.env.PHONEPE_MERCHANT_ID || '❌ MISSING',
+    PHONEPE_SALT_KEY: process.env.PHONEPE_SALT_KEY ? '✅ PRESENT' : '❌ MISSING',
+    PHONEPE_SALT_INDEX: process.env.PHONEPE_SALT_INDEX || '❌ MISSING',
+  });
 });
 
 // ✅ Start server
