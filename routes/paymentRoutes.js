@@ -4,6 +4,9 @@ const axios = require('axios');
 const qs = require('qs');
 const router = express.Router();
 const Booking = require('../models/Booking');
+const sendSMS = require('../utils/sendSMS'); // ✅ Added
+
+require('dotenv').config(); // ✅ Make sure env is loaded
 
 const tempBookingStore = {};
 
@@ -122,6 +125,11 @@ router.post('/phonepe/callback', async (req, res) => {
     });
 
     await newBooking.save();
+
+    // ✅ Send SMS after successful prepaid booking
+    const smsText = `Dear ${newBooking.name}, your prepaid booking is confirmed.\nFare: ₹${newBooking.totalFare}.\nThanks for choosing ItarsiTaxi.in!`;
+    await sendSMS(newBooking.mobile, smsText);
+
     delete tempBookingStore[merchantTransactionId];
 
     res.redirect(
