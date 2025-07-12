@@ -3,36 +3,38 @@ const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
 const router = express.Router();
+const Booking = require('../models/Booking'); // make sure this path is correct
 
-// ✅ PhonePe config (replace with your actual credentials or use env vars)
+const tempBookingStore = {}; // in-memory store (reset on server restart)
+
+// ✅ PhonePe config (use your actual credentials)
 const phonepeConfig = {
   merchantId: process.env.PHONEPE_MERCHANT_ID || 'YOUR_PHONEPE_MERCHANT_ID',
   saltKey: process.env.PHONEPE_SALT_KEY || 'YOUR_SALT_KEY',
   saltIndex: process.env.PHONEPE_SALT_INDEX || '1',
-  baseUrl: 'https://api-preprod.phonepe.com/apis/pg-sandbox', // change to prod when live
+  baseUrl: 'https://api-preprod.phonepe.com/apis/pg-sandbox',
   callbackUrl: 'https://itarsitaxi.in/payment-success',
 };
 
-// 🟢 INITIATE PHONEPE PAYMENT
+// 🟢 Step 1: Initiate PhonePe Payment
 router.post('/phonepe/initiate', async (req, res) => {
-  const { amount, mobile } = req.body;
+  const { amount, mobile, bookingData } = req.body;
 
-  if (!amount || amount < 1) {
-    return res.status(400).json({ success: false, message: 'Amount must be greater than 0' });
+  if (!amount || amount < 1 || !bookingData) {
+    return res.status(400).json({ success: false, message: 'Invalid request' });
   }
 
   const orderId = `ORDER_${Date.now()}`;
+
   const payload = {
     merchantId: phonepeConfig.merchantId,
     merchantTransactionId: orderId,
     merchantUserId: mobile || 'GUEST_USER',
-    amount: amount * 100, // in paisa
+    amount: amount * 100, // convert to paisa
     redirectUrl: phonepeConfig.callbackUrl,
     redirectMode: 'POST',
     callbackUrl: phonepeConfig.callbackUrl,
-    paymentInstrument: {
-      type: 'PAY_PAGE',
-    },
+    paymentInstrument: { type: 'PAY_PAGE' },
   };
 
   const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64');
@@ -55,24 +57,63 @@ router.post('/phonepe/initiate', async (req, res) => {
 
     const resData = response.data;
 
-    if (resData.success && resData.data && resData.data.instrumentResponse) {
-      const redirectUrl = resData.data.instrumentResponse.redirectInfo.url;
-      res.json({ success: true, redirectUrl });
-    } else {
-      res.status(500).json({ success: false, message: 'PhonePe response error', data: resData });
+    if (resData.success && resData.data?.instrumentResponse?.redirectInfo?.url) {
+      // 🔐 Store booking data temporarily for this order
+      tempBookingStore[orderId] = bookingData;
+
+      return res.json({
+        success: true,
+        redirectUrl: resData.data.instrumentResponse.redirectInfo.url,
+      });
     }
-  } catch (error) {
-    console.error('❌ PhonePe error:', error.response?.data || error.message);
-    res.status(500).json({ success: false, message: 'PhonePe payment initiation failed' });
+
+    res.status(500).json({ success: false, message: 'PhonePe error', data: resData });
+  } catch (err) {
+    console.error('❌ Payment error:', err.response?.data || err.message);
+    res.status(500).json({ success: false, message: 'Payment initiation failed' });
   }
 });
 
-// 🟢 OPTIONAL: Payment Callback Endpoint (from PhonePe)
-router.post('/phonepe/callback', (req, res) => {
-  console.log('📩 PhonePe callback received:', req.body);
-  // TODO: Save or verify payment result here
-  res.send("✅ Callback received. Thank you!");
-});
+// 🟢 Step 2: Handle Payment Callback
+router.post('/phonepe/callback', async (req, res) => {
+  const callbackData = req.body;
 
-module.exports = router;
+  const transactionId = callbackData.transactionId;
+  const merchantTransactionId = callbackData.merchantTransactionId;
+  const code = callbackData.code;
+
+  console.log('📩 PhonePe callback:', callbackData);
+
+  if (code !== 'PAYMENT_SUCCESS') {
+    console.warn(`❌ Payment failed or cancelled for ${merchantTransactionId}`);
+    return res.redirect('/payment-failed');
+  }
+
+  // ✅ Fetch stored booking data
+  const bookingData = tempBookingStore[merchantTransactionId];
+
+  if (!bookingData) {
+    return res.status(400).send('⚠️ No booking data found for this transaction');
+  }
+
+  try {
+    // Create booking in DB
+    const newBooking = new Booking({
+      ...bookingData,
+      paymentStatus: 'Paid',
+      transactionId,
+    });
+
+    await newBooking.save();
+
+    // Clear temp store
+    delete tempBookingStore[merchantTransactionId];
+
+    // Redirect to Thank You page
+    res.redirect(`/thank-you?name=${bookingData.name}&carType=${bookingData.carType}&fare=${bookingData.totalFare}`);
+  } catch (err) {
+    console.error('❌ DB save failed:', err);
+    res.status(500).send('Booking failed. Please contact support.');
+  }
+});
 
