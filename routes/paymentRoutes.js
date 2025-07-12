@@ -1,25 +1,21 @@
 // routes/paymentRoutes.js
 const express = require('express');
-const crypto = require('crypto');
 const axios = require('axios');
-const qs = require('qs'); // For x-www-form-urlencoded
+const qs = require('qs');
 const router = express.Router();
 const Booking = require('../models/Booking');
 
-const tempBookingStore = {}; // Memory-based cache
+const tempBookingStore = {};
 
-// ✅ PhonePe Production Config
 const phonepeConfig = {
   clientId: process.env.PHONEPE_CLIENT_ID,
   clientSecret: process.env.PHONEPE_CLIENT_SECRET,
   merchantId: process.env.PHONEPE_MERCHANT_ID,
-  saltKey: process.env.PHONEPE_SALT_KEY,
-  saltIndex: process.env.PHONEPE_SALT_INDEX || '1',
   baseUrl: 'https://api.phonepe.com',
   callbackUrl: 'https://itarsitaxi.in/payment-success',
 };
 
-// ✅ Token Fetch using client credentials
+// ✅ Fetch Access Token
 async function fetchAccessToken() {
   try {
     const body = qs.stringify({ grant_type: 'client_credentials' });
@@ -44,7 +40,7 @@ async function fetchAccessToken() {
   }
 }
 
-// 🟢 Step 1: Payment Initiation
+// 🟢 Initiate Payment
 router.post('/phonepe/initiate', async (req, res) => {
   const { amount, mobile, bookingData } = req.body;
 
@@ -66,10 +62,6 @@ router.post('/phonepe/initiate', async (req, res) => {
   };
 
   const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64');
-  const checksum = crypto
-    .createHash('sha256')
-    .update(base64Payload + '/pg/checkout/v2/pay' + phonepeConfig.saltKey)
-    .digest('hex');
 
   try {
     const token = await fetchAccessToken();
@@ -80,7 +72,6 @@ router.post('/phonepe/initiate', async (req, res) => {
       {
         headers: {
           'Content-Type': 'application/json',
-          'X-VERIFY': `${checksum}###${phonepeConfig.saltIndex}`,
           Authorization: `Bearer ${token}`,
         },
       }
@@ -103,22 +94,18 @@ router.post('/phonepe/initiate', async (req, res) => {
     console.error('❌ Final PhonePe Payment Error');
     if (err.response) {
       console.error('🔴 Response Data:', err.response.data);
-      console.error('🔴 Status:', err.response.status);
-    } else {
-      console.error('🔴 Error:', err.message);
     }
     res.status(500).json({ success: false, message: 'Payment initiation failed' });
   }
 });
 
-// 🟢 Step 2: Callback after Payment
+// 🟢 Callback
 router.post('/phonepe/callback', async (req, res) => {
   const { transactionId, merchantTransactionId, code } = req.body;
 
   console.log('📩 PhonePe callback received:', req.body);
 
   if (code !== 'PAYMENT_SUCCESS') {
-    console.warn(`❌ Payment failed/cancelled for transaction: ${merchantTransactionId}`);
     return res.redirect('/payment-failed');
   }
 
