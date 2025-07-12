@@ -1,47 +1,23 @@
-// routes/paymentRoutes.js
+// routes/paymentRoutes.js (Updated for PhonePe SDK)
 const express = require('express');
-const axios = require('axios');
-const qs = require('qs');
 const router = express.Router();
+const { v4: uuidv4 } = require('uuid');
 const Booking = require('../models/Booking');
-const sendSMS = require('../utils/sendSMS'); // ✅ Added
+const sendSMS = require('../utils/sendSMS');
+require('dotenv').config();
 
-require('dotenv').config(); // ✅ Make sure env is loaded
+// 🆕 PhonePe SDK Import
+const { StandardCheckoutClient, StandardCheckoutPayRequest, Env } = require('pg-sdk-node');
 
-const tempBookingStore = {};
+// 🛠️ SDK Setup
+const client = StandardCheckoutClient.getInstance(
+  process.env.PHONEPE_CLIENT_ID,
+  process.env.PHONEPE_CLIENT_SECRET,
+  parseInt(process.env.PHONEPE_CLIENT_VERSION),
+  Env.PRODUCTION // Change to Env.SANDBOX for testing
+);
 
-const phonepeConfig = {
-  clientId: process.env.PHONEPE_CLIENT_ID,
-  clientSecret: process.env.PHONEPE_CLIENT_SECRET,
-  merchantId: process.env.PHONEPE_MERCHANT_ID,
-  baseUrl: 'https://api.phonepe.com',
-  callbackUrl: 'https://itarsitaxi.in/payment-success',
-};
-
-// ✅ Fetch Access Token
-async function fetchAccessToken() {
-  try {
-    const body = qs.stringify({ grant_type: 'client_credentials' });
-
-    const response = await axios.post(
-      `${phonepeConfig.baseUrl}/apis/identity-manager/v1/oauth/token`,
-      body,
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Authorization:
-            'Basic ' +
-            Buffer.from(`${phonepeConfig.clientId}:${phonepeConfig.clientSecret}`).toString('base64'),
-        },
-      }
-    );
-
-    return response.data?.accessToken;
-  } catch (error) {
-    console.error('❌ Token Fetch Error:', error.response?.data || error.message);
-    throw new Error('Failed to fetch PhonePe token');
-  }
-}
+const tempBookingStore = {}; // For holding temporary booking data
 
 // 🟢 Initiate Payment
 router.post('/phonepe/initiate', async (req, res) => {
@@ -51,95 +27,39 @@ router.post('/phonepe/initiate', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invalid request' });
   }
 
-  // ✅ If payment mode is Cash on Arrival, create booking directly and send SMS
-  if (bookingData.paymentMode === 'Cash on Arrival') {
-    try {
-      const newBooking = new Booking({
-        ...bookingData,
-        paymentStatus: 'Pending',
-        transactionId: 'CASH_ON_ARRIVAL',
-      });
-
-      await newBooking.save();
-
-      const smsText = `Dear ${newBooking.name}, your booking is confirmed for ${newBooking.pickupDate} ${newBooking.pickupTime}. Thanks for choosing ItarsiTaxi.in!`;
-      const adminSMS = `New booking: ${newBooking.name}, ${newBooking.mobile}, ${newBooking.carType}, ₹${newBooking.totalFare}`;
-
-      await sendSMS(newBooking.mobile, smsText);
-      await sendSMS('7000771918', adminSMS);
-
-      return res.json({
-        success: true,
-        redirectUrl: `/thank-you?name=${newBooking.name}&carType=${newBooking.carType}&fare=${newBooking.totalFare}`,
-      });
-    } catch (err) {
-      console.error('❌ Cash Booking Error:', err);
-      return res.status(500).json({ success: false, message: 'Cash booking failed' });
-    }
-  }
-
-  const orderId = `ORDER_${Date.now()}`;
-
-  const payload = {
-    merchantId: phonepeConfig.merchantId,
-    merchantTransactionId: orderId,
-    merchantUserId: mobile || 'GUEST_USER',
-    amount: amount * 100,
-    redirectUrl: phonepeConfig.callbackUrl,
-    redirectMode: 'POST',
-    callbackUrl: phonepeConfig.callbackUrl,
-    paymentInstrument: { type: 'PAY_PAGE' },
-  };
-
-  const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64');
+  const merchantOrderId = uuidv4();
 
   try {
-    const token = await fetchAccessToken();
+    const request = StandardCheckoutPayRequest.builder()
+      .merchantOrderId(merchantOrderId)
+      .amount(amount * 100)
+      .redirectUrl(process.env.PHONEPE_REDIRECT_URL || 'https://itarsitaxi.in/payment-success')
+      .build();
 
-    const response = await axios.post(
-      `${phonepeConfig.baseUrl}/apis/pg/checkout/v2/pay`,
-      { request: base64Payload },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const response = await client.pay(request);
+    const redirectUrl = response.redirectUrl;
 
-    const resData = response.data;
+    // Store temporary booking for callback
+    tempBookingStore[merchantOrderId] = bookingData;
 
-    if (resData.success && resData.data?.instrumentResponse?.redirectInfo?.url) {
-      tempBookingStore[orderId] = bookingData;
-
-      return res.json({
-        success: true,
-        redirectUrl: resData.data.instrumentResponse.redirectInfo.url,
-      });
-    }
-
-    console.error('❌ PhonePe responded with failure:', resData);
-    res.status(500).json({ success: false, message: 'PhonePe error', data: resData });
+    res.json({ success: true, redirectUrl });
   } catch (err) {
-    console.error('❌ Final PhonePe Payment Error');
-    if (err.response) {
-      console.error('🔴 Response Data:', err.response.data);
-    }
+    console.error('❌ PhonePe SDK Error:', err);
     res.status(500).json({ success: false, message: 'Payment initiation failed' });
   }
 });
 
-// 🟢 Callback
+// 🟢 Callback Handling
 router.post('/phonepe/callback', async (req, res) => {
-  const { transactionId, merchantTransactionId, code } = req.body;
+  const { transactionId, merchantOrderId, code } = req.body;
 
-  console.log('📩 PhonePe callback received:', req.body);
+  console.log('📩 Callback received:', req.body);
 
   if (code !== 'PAYMENT_SUCCESS') {
     return res.redirect('/payment-failed');
   }
 
-  const bookingData = tempBookingStore[merchantTransactionId];
+  const bookingData = tempBookingStore[merchantOrderId];
   if (!bookingData) {
     return res.status(400).send('⚠️ No booking data found for this transaction');
   }
@@ -153,14 +73,13 @@ router.post('/phonepe/callback', async (req, res) => {
 
     await newBooking.save();
 
-    // ✅ Send SMS after successful prepaid booking
     const smsText = `Dear ${newBooking.name}, your prepaid booking is confirmed.\nFare: ₹${newBooking.totalFare}.\nThanks for choosing ItarsiTaxi.in!`;
     await sendSMS(newBooking.mobile, smsText);
 
-    delete tempBookingStore[merchantTransactionId];
+    delete tempBookingStore[merchantOrderId];
 
     res.redirect(
-      `/thank-you?name=${bookingData.name}&carType=${bookingData.carType}&fare=${bookingData.totalFare}`
+      `/thank-you?name=${newBooking.name}&carType=${newBooking.carType}&fare=${newBooking.totalFare}`
     );
   } catch (err) {
     console.error('❌ DB Save Error:', err);
