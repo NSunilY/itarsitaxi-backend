@@ -51,6 +51,33 @@ router.post('/phonepe/initiate', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invalid request' });
   }
 
+  // ✅ If payment mode is Cash on Arrival, create booking directly and send SMS
+  if (bookingData.paymentMode === 'Cash on Arrival') {
+    try {
+      const newBooking = new Booking({
+        ...bookingData,
+        paymentStatus: 'Pending',
+        transactionId: 'CASH_ON_ARRIVAL',
+      });
+
+      await newBooking.save();
+
+      const smsText = `Dear ${newBooking.name}, your booking is confirmed for ${newBooking.pickupDate} ${newBooking.pickupTime}. Thanks for choosing ItarsiTaxi.in!`;
+      const adminSMS = `New booking: ${newBooking.name}, ${newBooking.mobile}, ${newBooking.carType}, ₹${newBooking.totalFare}`;
+
+      await sendSMS(newBooking.mobile, smsText);
+      await sendSMS('7000771918', adminSMS);
+
+      return res.json({
+        success: true,
+        redirectUrl: `/thank-you?name=${newBooking.name}&carType=${newBooking.carType}&fare=${newBooking.totalFare}`,
+      });
+    } catch (err) {
+      console.error('❌ Cash Booking Error:', err);
+      return res.status(500).json({ success: false, message: 'Cash booking failed' });
+    }
+  }
+
   const orderId = `ORDER_${Date.now()}`;
 
   const payload = {
