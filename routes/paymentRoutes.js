@@ -7,14 +7,39 @@ const Booking = require('../models/Booking');
 
 const tempBookingStore = {}; // Memory store (cleared on restart)
 
+// ✅ PhonePe Production Config
 const phonepeConfig = {
+  clientId: process.env.PHONEPE_CLIENT_ID,
+  clientSecret: process.env.PHONEPE_CLIENT_SECRET,
   merchantId: process.env.PHONEPE_MERCHANT_ID,
   saltKey: process.env.PHONEPE_SALT_KEY,
   saltIndex: process.env.PHONEPE_SALT_INDEX || '1',
-  baseUrl: 'https://api.phonepe.com/apis/pg', // ✅ Production URL
-  authUrl: 'https://api.phonepe.com/apis/identity-manager/v1/oauth/token',
+  baseUrl: 'https://api.phonepe.com',
   callbackUrl: 'https://itarsitaxi.in/payment-success',
 };
+
+// ✅ Fetch Bearer Token using client_id & client_secret
+async function fetchAccessToken() {
+  try {
+    const response = await axios.post(
+      `${phonepeConfig.baseUrl}/apis/identity-manager/v1/oauth/token`,
+      {
+        clientId: phonepeConfig.clientId,
+        clientSecret: phonepeConfig.clientSecret,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    return response.data?.accessToken;
+  } catch (error) {
+    console.error('❌ Token Fetch Error:', error.response?.data || error.message);
+    throw new Error('Failed to fetch PhonePe token');
+  }
+}
 
 // 🟢 Step 1: Initiate Payment
 router.post('/phonepe/initiate', async (req, res) => {
@@ -40,45 +65,20 @@ router.post('/phonepe/initiate', async (req, res) => {
   const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64');
   const checksum = crypto
     .createHash('sha256')
-    .update(base64Payload + '/checkout/v2/pay' + phonepeConfig.saltKey)
+    .update(base64Payload + '/pg/checkout/v2/pay' + phonepeConfig.saltKey)
     .digest('hex');
 
-  // ✅ Debug
-  console.log('📤 Initiating PhonePe payment...');
-  console.log('🔗 Endpoint:', `${phonepeConfig.baseUrl}/checkout/v2/pay`);
-  console.log('📦 Payload:', payload);
-  console.log('🧾 Encoded:', base64Payload);
-  console.log('🔐 X-VERIFY:', `${checksum}###${phonepeConfig.saltIndex}`);
-
   try {
-    // ✅ Step 1: Fetch Bearer token
-const tokenRes = await axios.post(
-  phonepeConfig.authUrl,
-  'grant_type=client_credentials',
-  {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: 'Basic ' + Buffer.from(`${phonepeConfig.merchantId}:${phonepeConfig.saltKey}`).toString('base64'),
-    },
-  }
-);
+    const token = await fetchAccessToken();
 
-    const token = tokenRes.data?.data?.token;
-
-    if (!token) {
-      console.error('❌ Failed to get auth token:', tokenRes.data);
-      return res.status(500).json({ success: false, message: 'Authorization failed' });
-    }
-
-    // ✅ Step 2: Initiate Payment
     const response = await axios.post(
-      `${phonepeConfig.baseUrl}/checkout/v2/pay`,
+      `${phonepeConfig.baseUrl}/apis/pg/checkout/v2/pay`,
       { request: base64Payload },
       {
         headers: {
           'Content-Type': 'application/json',
           'X-VERIFY': `${checksum}###${phonepeConfig.saltIndex}`,
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       }
     );
@@ -101,7 +101,6 @@ const tokenRes = await axios.post(
     if (err.response) {
       console.error('🔴 Response Data:', err.response.data);
       console.error('🔴 Status:', err.response.status);
-      console.error('🔴 Headers:', err.response.headers);
     } else {
       console.error('🔴 Error:', err.message);
     }
