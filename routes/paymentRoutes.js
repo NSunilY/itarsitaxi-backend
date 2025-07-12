@@ -116,4 +116,5 @@ router.post('/phonepe/callback', async (req, res) => {
     res.status(500).send('Booking failed. Please contact support.');
   }
 });
+module.exports = router;
 
