@@ -1,10 +1,13 @@
-// routes/paymentRoutes.js (Stable & Fixed Version)
+// routes/paymentRoutes.js (Stable & Fixed Version with Admin SMS & Booking ID)
 const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const Booking = require('../models/Booking');
 const sendSMS = require('../utils/sendSMS');
 require('dotenv').config();
+
+// ✅ Admin number
+const ADMIN_MOBILE = '9876543210'; // Replace with your actual admin number
 
 // 🆕 PhonePe SDK Import
 const {
@@ -21,9 +24,6 @@ const client = StandardCheckoutClient.getInstance(
   Env.PRODUCTION
 );
 
-// Save temp bookings in DB instead of memory
-const tempBookingModel = Booking; // reuse same model with pending status
-
 // 🟢 Initiate Payment
 router.post('/phonepe/initiate', async (req, res) => {
   const { amount, mobile, bookingData } = req.body;
@@ -35,7 +35,6 @@ router.post('/phonepe/initiate', async (req, res) => {
   const merchantOrderId = uuidv4();
 
   try {
-    // ✅ Save temporary booking
     const tempBooking = new Booking({
       ...bookingData,
       paymentStatus: 'Pending',
@@ -43,12 +42,11 @@ router.post('/phonepe/initiate', async (req, res) => {
     });
     await tempBooking.save();
 
-    // ✅ Setup request
-const request = StandardCheckoutPayRequest.builder()
-  .merchantOrderId(merchantOrderId)
-  .amount(amount * 100)
-  .redirectUrl(process.env.PHONEPE_REDIRECT_URL || 'https://itarsitaxi.in/payment-success')
-  .build();
+    const request = StandardCheckoutPayRequest.builder()
+      .merchantOrderId(merchantOrderId)
+      .amount(amount * 100)
+      .redirectUrl(process.env.PHONEPE_REDIRECT_URL || 'https://itarsitaxi.in/payment-success')
+      .build();
 
     const response = await client.pay(request);
     const redirectUrl = response.redirectUrl;
@@ -60,7 +58,7 @@ const request = StandardCheckoutPayRequest.builder()
   }
 });
 
-// 🟢 Callback Handling
+// 🟢 Callback Handling (Prepaid)
 router.post('/phonepe/callback', async (req, res) => {
   console.log('📩 Callback hit! Raw Body:', req.body);
   const { transactionId, merchantOrderId, code } = req.body;
@@ -71,6 +69,7 @@ router.post('/phonepe/callback', async (req, res) => {
 
   try {
     const booking = await Booking.findOne({ transactionId: merchantOrderId });
+
     if (!booking) {
       return res.status(400).send('⚠️ No booking found for this transaction');
     }
@@ -78,11 +77,16 @@ router.post('/phonepe/callback', async (req, res) => {
     booking.paymentStatus = 'Paid';
     await booking.save();
 
-    const smsText = `Dear ${booking.name}, your prepaid booking is confirmed.\nFare: ₹${booking.totalFare}.\nThanks for choosing ItarsiTaxi.in!`;
-    await sendSMS(booking.mobile, smsText);
+    const smsToCustomer = `Dear ${booking.name}, your prepaid booking is confirmed.\nFare: ₹${booking.totalFare}.\nThanks for choosing ItarsiTaxi.in!`;
+    const smsToAdmin = `✅ Prepaid Booking: ${booking.name}, ${booking.mobile}, ${booking.carType}, ₹${booking.totalFare}`;
+
+    await sendSMS(booking.mobile, smsToCustomer);
+    await sendSMS(ADMIN_MOBILE, smsToAdmin);
+
+    console.log(`✅ Booking confirmed & saved: ID ${booking._id}`);
 
     res.redirect(
-      `/thank-you?name=${booking.name}&carType=${booking.carType}&fare=${booking.totalFare}`
+      `/thank-you?name=${booking.name}&carType=${booking.carType}&fare=${booking.totalFare}&bookingId=${booking._id}`
     );
   } catch (err) {
     console.error('❌ Callback Processing Error:', err);
@@ -101,10 +105,13 @@ router.post('/cash-booking', async (req, res) => {
 
     await newBooking.save();
 
-    const smsText = `Dear ${newBooking.name}, your booking is confirmed.\nFare: ₹${newBooking.totalFare}.\nPlease pay in cash to the driver.\nThanks - ItarsiTaxi.in`;
-    await sendSMS(newBooking.mobile, smsText);
+    const smsToCustomer = `Dear ${newBooking.name}, your booking is confirmed.\nFare: ₹${newBooking.totalFare}.\nPlease pay in cash to the driver.\nThanks - ItarsiTaxi.in`;
+    const smsToAdmin = `🟡 COD Booking: ${newBooking.name}, ${newBooking.mobile}, ${newBooking.carType}, ₹${newBooking.totalFare}`;
 
-    res.json({ success: true, message: 'Booking successful' });
+    await sendSMS(newBooking.mobile, smsToCustomer);
+    await sendSMS(ADMIN_MOBILE, smsToAdmin);
+
+    res.json({ success: true, bookingId: newBooking._id });
   } catch (err) {
     console.error('❌ Cash Booking Error:', err);
     res.status(500).json({ success: false, message: 'Booking failed' });
