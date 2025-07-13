@@ -4,7 +4,7 @@ const Booking = require('../models/Booking'); // adjust path based on your struc
 const sendSMS = require('../utils/sendSMS');
 
 // Replace with your admin number
-const ADMIN_MOBILE = '9876543210';
+const ADMIN_MOBILE = '7000771918';
 
 router.post('/', async (req, res) => {
   const {
@@ -24,9 +24,8 @@ router.post('/', async (req, res) => {
     const messageToAdmin = `New Booking: ${name} - ${mobile}, ${carType}, ${distance} km, ₹${totalFare}.`;
 
     // Send SMS to both customer and admin
-    await sendSMS(messageToCustomer, mobile);
-    await sendSMS(messageToAdmin, ADMIN_MOBILE);
-
+await sendSMS(mobile, messageToCustomer);
+await sendSMS(ADMIN_MOBILE, messageToAdmin);
     res.json({ success: true, bookingId: booking._id });
   } catch (err) {
     console.error(err);
