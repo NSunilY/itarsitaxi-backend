@@ -64,7 +64,7 @@ router.get('/phonepe/callback', async (req, res) => {
   }
 
   try {
-    const statusRes = await client.getStatus(merchantOrderId); // ✅ Correct for v2.0.2
+const statusRes = await client.status(merchantOrderId);
     const result = statusRes.data;
 
     console.log('📦 [GET] Payment status result:', result);
