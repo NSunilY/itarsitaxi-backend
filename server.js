@@ -80,7 +80,7 @@ app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/drivers', driverRoutes);
 app.use('/api/payment', paymentRoutes);
 
-// ✅ Health check
+// ✅ Health check routes
 app.get('/', (req, res) => {
   res.send('✅ ItarsiTaxi Backend is Live');
 });
@@ -89,7 +89,6 @@ app.get('/api/ping', (req, res) => {
   res.status(200).send('pong');
 });
 
-// ✅ TEMP ENV debug route
 app.get('/api/debug-env', (req, res) => {
   res.json({
     PHONEPE_CLIENT_ID: process.env.PHONEPE_CLIENT_ID || '❌ MISSING',
@@ -100,10 +99,12 @@ app.get('/api/debug-env', (req, res) => {
   });
 });
 
-// ✅ Serve frontend build
-app.use(express.static(path.join(__dirname, 'build')));
+// ✅ Serve React frontend (if deployed together)
+const buildPath = path.join(__dirname, 'client', 'build'); // <-- adjust if your build folder is elsewhere
+app.use(express.static(buildPath));
+
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+  res.sendFile(path.join(buildPath, 'index.html'));
 });
 
 // ✅ Start Server
