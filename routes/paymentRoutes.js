@@ -39,10 +39,7 @@ router.post('/phonepe/initiate', async (req, res) => {
     const response = await client.pay(request);
     const redirectUrl = response.redirectUrl;
 
-    // ✅ Temporarily store bookingData in memory or DB with txnId (optional)
-    // We'll use callback to save it properly after success
-
-    // Store basic details in memory (not saved until success)
+    // ✅ Temporarily store bookingData in memory
     req.app.locals.tempBookings = req.app.locals.tempBookings || {};
     req.app.locals.tempBookings[merchantOrderId] = { ...bookingData, advanceAmount: amount };
 
@@ -51,6 +48,12 @@ router.post('/phonepe/initiate', async (req, res) => {
     console.error('❌ Payment initiation error:', err);
     return res.status(500).json({ success: false, message: 'Payment initiation failed' });
   }
+});
+
+// ✅ NEW: Handle GET /callback (when user cancels payment)
+router.get('/phonepe/callback', (req, res) => {
+  console.warn('⚠️ GET /phonepe/callback hit — likely cancelled payment.');
+  return res.redirect('/payment-failed'); // Your frontend route
 });
 
 // ✅ CALLBACK AFTER PAYMENT
@@ -64,7 +67,6 @@ router.post('/phonepe/callback', async (req, res) => {
     const result = statusRes.data;
 
     if (result.success && result.code === 'PAYMENT_SUCCESS') {
-      // Retrieve stored booking data
       const tempBookingData = req.app.locals.tempBookings?.[merchantOrderId];
 
       if (!tempBookingData) {
@@ -72,7 +74,6 @@ router.post('/phonepe/callback', async (req, res) => {
         return res.redirect('/payment-failed');
       }
 
-      // Save final booking
       const booking = new Booking({
         ...tempBookingData,
         paymentStatus: 'Paid',
@@ -80,7 +81,6 @@ router.post('/phonepe/callback', async (req, res) => {
       });
 
       await booking.save();
-
       console.log(`✅ Booking saved: ${booking._id}`);
 
       // 🔔 SMS to customer
@@ -91,7 +91,6 @@ router.post('/phonepe/callback', async (req, res) => {
       const adminSMS = `🆕 Prepaid Booking:\nName: ${booking.name}\nMobile: ${booking.mobile}\nCar: ${booking.carType}\nFare: ₹${booking.totalFare}\nAdvance: ₹${booking.advanceAmount}`;
       await sendSMS('7000771918', adminSMS);
 
-      // ✅ Redirect to payment-success
       return res.redirect(
         `${process.env.PHONEPE_REDIRECT_URL}?bookingId=${booking._id}&name=${encodeURIComponent(
           booking.name
