@@ -19,7 +19,7 @@ const client = StandardCheckoutClient.getInstance(
   Env.PRODUCTION
 );
 
-// 🟢 INITIATE PAYMENT
+// 🟢 INITIATE PAYMENT — NO BOOKING CREATED YET
 router.post('/phonepe/initiate', async (req, res) => {
   const { amount, mobile, bookingData } = req.body;
 
@@ -30,21 +30,11 @@ router.post('/phonepe/initiate', async (req, res) => {
   const merchantOrderId = uuidv4();
 
   try {
-    const tempBooking = new Booking({
-      ...bookingData,
-      paymentStatus: 'Pending',
-      transactionId: merchantOrderId,
-      advanceAmount: amount,
-    });
-    await tempBooking.save();
-
     const request = StandardCheckoutPayRequest.builder()
       .merchantOrderId(merchantOrderId)
       .amount(amount * 100)
       .redirectUrl(
-        `${process.env.PHONEPE_REDIRECT_URL}?bookingId=${tempBooking._id}&name=${encodeURIComponent(
-          tempBooking.name
-        )}&carType=${encodeURIComponent(tempBooking.carType)}&fare=${tempBooking.totalFare}&distance=${tempBooking.distance}`
+        `${process.env.PHONEPE_REDIRECT_URL}?merchantOrderId=${merchantOrderId}&data=${encodeURIComponent(JSON.stringify(bookingData))}&advance=${amount}`
       )
       .build();
 
@@ -58,59 +48,56 @@ router.post('/phonepe/initiate', async (req, res) => {
   }
 });
 
-// ✅ CALLBACK AFTER PAYMENT
+// ✅ CALLBACK — CREATE BOOKING ONLY ON PAYMENT SUCCESS
 router.post('/phonepe/callback', async (req, res) => {
-  console.log('📩 PhonePe Callback hit:', req.body);
+  console.log('📩 Callback hit:', req.body);
 
   const { merchantOrderId } = req.body;
 
-  if (!merchantOrderId) {
-    return res.status(400).send('Missing transaction ID');
-  }
-
   try {
-    // ✅ Use SDK correctly
     const statusRes = await client.status(merchantOrderId);
+    const result = statusRes.data;
 
-    console.log('📦 PhonePe SDK status:', statusRes);
+    if (result.success && result.code === 'PAYMENT_SUCCESS') {
+      // Read query params from redirect URL
+      const rawUrl = req.headers.referer || '';
+      const url = new URL(rawUrl);
+      const bookingData = JSON.parse(decodeURIComponent(url.searchParams.get('data')));
+      const advanceAmount = parseInt(url.searchParams.get('advance')) || 0;
 
-    if (statusRes.success && statusRes.code === 'PAYMENT_SUCCESS') {
-      const booking = await Booking.findOne({ transactionId: merchantOrderId });
+      const newBooking = new Booking({
+        ...bookingData,
+        paymentStatus: 'Paid',
+        transactionId: merchantOrderId,
+        advanceAmount,
+      });
 
-      if (!booking) {
-        console.error('⚠️ Booking not found for txn:', merchantOrderId);
-        return res.status(404).send('Booking not found');
-      }
-
-      booking.paymentStatus = 'Paid';
-      await booking.save();
-
-      console.log(`✅ Booking marked as Paid: ${booking._id}`);
+      await newBooking.save();
 
       // 🔔 SMS to customer
-      const customerSMS = `Dear ${booking.name}, your prepaid booking is confirmed.\nAdvance Paid: ₹${booking.advanceAmount || 0}\nTotal Fare: ₹${booking.totalFare}.\nThanks - ItarsiTaxi.in`;
-      await sendSMS(booking.mobile, customerSMS);
+      const customerSMS = `Dear ${newBooking.name}, your prepaid booking is confirmed.\nAdvance Paid: ₹${newBooking.advanceAmount}\nTotal Fare: ₹${newBooking.totalFare}.\nThanks - ItarsiTaxi.in`;
+      await sendSMS(newBooking.mobile, customerSMS);
 
       // 🔔 SMS to admin
-      const adminSMS = `🆕 Prepaid Booking:\nName: ${booking.name}\nMobile: ${booking.mobile}\nCar: ${booking.carType}\nFare: ₹${booking.totalFare}\nAdvance: ₹${booking.advanceAmount || 0}`;
+      const adminSMS = `🆕 Prepaid Booking:\nName: ${newBooking.name}\nMobile: ${newBooking.mobile}\nCar: ${newBooking.carType}\nFare: ₹${newBooking.totalFare}\nAdvance: ₹${newBooking.advanceAmount}`;
       await sendSMS('7000771918', adminSMS);
 
       return res.redirect(
-        `${process.env.PHONEPE_REDIRECT_URL}?bookingId=${booking._id}&name=${encodeURIComponent(
-          booking.name
-        )}&carType=${encodeURIComponent(booking.carType)}&distance=${booking.distance}&fare=${booking.totalFare}`
+        `${process.env.PHONEPE_REDIRECT_URL}?bookingId=${newBooking._id}&name=${encodeURIComponent(
+          newBooking.name
+        )}&carType=${encodeURIComponent(newBooking.carType)}&fare=${newBooking.totalFare}&distance=${newBooking.distance}`
       );
     } else {
-      console.warn('❌ Payment status not successful:', statusRes);
+      console.warn('❌ Payment failed:', result);
       return res.redirect('/payment-failed');
     }
   } catch (err) {
-    console.error('❌ Payment callback error:', err);
-    return res.status(500).send('Callback processing failed');
+    console.error('❌ Callback error:', err.response?.data || err.message);
+    return res.redirect('/payment-failed');
   }
 });
 
-// ✅ CASH ON ARRIVAL BOOKING
+// ✅ CASH ON ARRIVAL BOOKING (no change here)
 router.post('/cash-booking', async (req, res) => {
   try {
     const bookingData = req.body;
@@ -128,7 +115,7 @@ router.post('/cash-booking', async (req, res) => {
 
     // 🔔 SMS to admin
     const adminSMS = `🆕 COD Booking:\nName: ${newBooking.name}\nMobile: ${newBooking.mobile}\nCar: ${newBooking.carType}\nFare: ₹${newBooking.totalFare}`;
-    await sendSMS('7000771918', adminSMS); // ✅ Fixed admin number
+    await sendSMS('7000771918', adminSMS);
 
     res.json({ success: true, message: 'Booking successful', bookingId: newBooking._id });
   } catch (err) {
