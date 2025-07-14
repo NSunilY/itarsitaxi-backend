@@ -60,19 +60,26 @@ router.get('/phonepe/callback', (req, res) => {
 
 // ✅ POST CALLBACK — PhonePe will call this on success
 router.post('/phonepe/callback', async (req, res) => {
-  const { merchantOrderId } = req.body;
+  const merchantOrderId = req.query.txnId || req.body.merchantOrderId;
 
-  console.log('📩 Callback received for txnId:', merchantOrderId);
+  console.log('📩 [POST] Callback received for txnId:', merchantOrderId);
+
+  if (!merchantOrderId) {
+    console.error('❌ No txnId found in callback');
+    return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
+  }
 
   try {
     const statusRes = await client.status(merchantOrderId);
     const result = statusRes.data;
 
+    console.log('📦 Payment status result:', result);
+
     if (result.success && result.code === 'PAYMENT_SUCCESS') {
       const tempBookingData = req.app.locals.tempBookings?.[merchantOrderId];
 
       if (!tempBookingData) {
-        console.error('❌ No booking data found for:', merchantOrderId);
+        console.error('❌ No temp booking found for txnId:', merchantOrderId);
         return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
       }
 
@@ -83,22 +90,25 @@ router.post('/phonepe/callback', async (req, res) => {
       });
 
       await booking.save();
+
       console.log(`✅ Booking saved: ${booking._id}`);
 
-      // 🔔 SMS
+      // 🔔 SMS to customer
       const customerSMS = `Dear ${booking.name}, your prepaid booking is confirmed.\nAdvance Paid: ₹${booking.advanceAmount}\nTotal Fare: ₹${booking.totalFare}.\nThanks - ItarsiTaxi.in`;
-      const adminSMS = `🆕 Prepaid Booking:\nName: ${booking.name}\nMobile: ${booking.mobile}\nCar: ${booking.carType}\nFare: ₹${booking.totalFare}\nAdvance: ₹${booking.advanceAmount}`;
-
       await sendSMS(booking.mobile, customerSMS);
+
+      // 🔔 SMS to admin
+      const adminSMS = `🆕 Prepaid Booking:\nName: ${booking.name}\nMobile: ${booking.mobile}\nCar: ${booking.carType}\nFare: ₹${booking.totalFare}\nAdvance: ₹${booking.advanceAmount}`;
       await sendSMS('7000771918', adminSMS);
 
+      // ✅ Redirect to frontend success page with details
       return res.redirect(
         `${process.env.PHONEPE_REDIRECT_URL}/payment-success?bookingId=${booking._id}&name=${encodeURIComponent(
           booking.name
         )}&carType=${encodeURIComponent(booking.carType)}&distance=${booking.distance}&fare=${booking.totalFare}`
       );
     } else {
-      console.warn('❌ Payment not successful:', result.code);
+      console.warn('❌ Payment not successful:', result);
       return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
     }
   } catch (err) {
