@@ -33,15 +33,17 @@ router.post('/phonepe/initiate', async (req, res) => {
     const request = StandardCheckoutPayRequest.builder()
       .merchantOrderId(merchantOrderId)
       .amount(amount * 100)
-      .redirectUrl(`${process.env.PHONEPE_CALLBACK_URL}?txnId=${merchantOrderId}`) // ✅ redirect to /payment/callback
+      .redirectUrl(`${process.env.PHONEPE_CALLBACK_URL}?txnId=${merchantOrderId}`)
       .build();
 
     const response = await client.pay(request);
     const redirectUrl = response.redirectUrl;
 
-    // ✅ Temporarily store bookingData in memory
     req.app.locals.tempBookings = req.app.locals.tempBookings || {};
-    req.app.locals.tempBookings[merchantOrderId] = { ...bookingData, advanceAmount: amount };
+    req.app.locals.tempBookings[merchantOrderId] = {
+      ...bookingData,
+      advanceAmount: amount,
+    };
 
     return res.json({ success: true, redirectUrl });
   } catch (err) {
@@ -50,13 +52,13 @@ router.post('/phonepe/initiate', async (req, res) => {
   }
 });
 
-// ✅ NEW: Handle GET /callback (when user cancels payment)
+// ✅ GET CALLBACK — when payment is cancelled or closed
 router.get('/phonepe/callback', (req, res) => {
   console.warn('⚠️ GET /phonepe/callback hit — likely cancelled payment.');
-  return res.redirect('/payment-failed'); // Your frontend route
+  return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
 });
 
-// ✅ CALLBACK AFTER PAYMENT
+// ✅ POST CALLBACK — PhonePe will call this on success
 router.post('/phonepe/callback', async (req, res) => {
   const { merchantOrderId } = req.body;
 
@@ -71,7 +73,7 @@ router.post('/phonepe/callback', async (req, res) => {
 
       if (!tempBookingData) {
         console.error('❌ No booking data found for:', merchantOrderId);
-        return res.redirect('/payment-failed');
+        return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
       }
 
       const booking = new Booking({
@@ -83,26 +85,25 @@ router.post('/phonepe/callback', async (req, res) => {
       await booking.save();
       console.log(`✅ Booking saved: ${booking._id}`);
 
-      // 🔔 SMS to customer
+      // 🔔 SMS
       const customerSMS = `Dear ${booking.name}, your prepaid booking is confirmed.\nAdvance Paid: ₹${booking.advanceAmount}\nTotal Fare: ₹${booking.totalFare}.\nThanks - ItarsiTaxi.in`;
-      await sendSMS(booking.mobile, customerSMS);
-
-      // 🔔 SMS to admin
       const adminSMS = `🆕 Prepaid Booking:\nName: ${booking.name}\nMobile: ${booking.mobile}\nCar: ${booking.carType}\nFare: ₹${booking.totalFare}\nAdvance: ₹${booking.advanceAmount}`;
+
+      await sendSMS(booking.mobile, customerSMS);
       await sendSMS('7000771918', adminSMS);
 
       return res.redirect(
-        `${process.env.PHONEPE_REDIRECT_URL}?bookingId=${booking._id}&name=${encodeURIComponent(
+        `${process.env.PHONEPE_REDIRECT_URL}/payment-success?bookingId=${booking._id}&name=${encodeURIComponent(
           booking.name
         )}&carType=${encodeURIComponent(booking.carType)}&distance=${booking.distance}&fare=${booking.totalFare}`
       );
     } else {
       console.warn('❌ Payment not successful:', result.code);
-      return res.redirect('/payment-failed');
+      return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
     }
   } catch (err) {
     console.error('❌ Callback error:', err.response?.data || err.message);
-    return res.redirect('/payment-failed');
+    return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
   }
 });
 
@@ -118,12 +119,10 @@ router.post('/cash-booking', async (req, res) => {
 
     await newBooking.save();
 
-    // 🔔 SMS to customer
     const smsText = `Dear ${newBooking.name}, your booking is confirmed.\nFare: ₹${newBooking.totalFare}.\nPlease pay in cash to the driver.\nThanks - ItarsiTaxi.in`;
-    await sendSMS(newBooking.mobile, smsText);
-
-    // 🔔 SMS to admin
     const adminSMS = `🆕 COD Booking:\nName: ${newBooking.name}\nMobile: ${newBooking.mobile}\nCar: ${newBooking.carType}\nFare: ₹${newBooking.totalFare}`;
+
+    await sendSMS(newBooking.mobile, smsText);
     await sendSMS('7000771918', adminSMS);
 
     res.json({ success: true, message: 'Booking successful', bookingId: newBooking._id });
