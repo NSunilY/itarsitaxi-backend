@@ -33,7 +33,7 @@ router.post('/phonepe/initiate', async (req, res) => {
     const request = StandardCheckoutPayRequest.builder()
       .merchantOrderId(merchantOrderId)
       .amount(amount * 100)
-.redirectUrl(`${process.env.PHONEPE_CALLBACK_URL}?txnId=${merchantOrderId}`)
+      .redirectUrl(`${process.env.PHONEPE_CALLBACK_URL}?txnId=${merchantOrderId}`)
       .build();
 
     const response = await client.pay(request);
@@ -60,11 +60,11 @@ router.get('/phonepe/callback', async (req, res) => {
 
   if (!merchantOrderId) {
     console.warn('⚠️ Missing txnId in query — treating as failure');
-    return res.redirect(${process.env.PHONEPE_REDIRECT_URL}/payment-failed);
+    return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
   }
 
   try {
-const statusRes = await client.checkStatus(merchantOrderId);
+    const statusRes = await client.status(merchantOrderId);
     const result = statusRes.data;
 
     console.log('📦 [GET] Payment status result:', result);
@@ -74,7 +74,7 @@ const statusRes = await client.checkStatus(merchantOrderId);
 
       if (!tempBookingData) {
         console.error('❌ [GET] No temp booking data found for txnId:', merchantOrderId);
-        return res.redirect(${process.env.PHONEPE_REDIRECT_URL}/payment-failed);
+        return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
       }
 
       const booking = new Booking({
@@ -85,28 +85,28 @@ const statusRes = await client.checkStatus(merchantOrderId);
 
       await booking.save();
 
-      console.log(✅ [GET] Booking saved: ${booking._id});
+      console.log(`✅ [GET] Booking saved: ${booking._id}`);
 
       // 🔔 SMS to customer
-      const customerSMS = Dear ${booking.name}, your prepaid booking is confirmed.\nAdvance Paid: ₹${booking.advanceAmount}\nTotal Fare: ₹${booking.totalFare}.\nThanks - ItarsiTaxi.in;
+      const customerSMS = `Dear ${booking.name}, your prepaid booking is confirmed.\nAdvance Paid: ₹${booking.advanceAmount}\nTotal Fare: ₹${booking.totalFare}.\nThanks - ItarsiTaxi.in`;
       await sendSMS(booking.mobile, customerSMS);
 
       // 🔔 SMS to admin
-      const adminSMS = 🆕 Prepaid Booking:\nName: ${booking.name}\nMobile: ${booking.mobile}\nCar: ${booking.carType}\nFare: ₹${booking.totalFare}\nAdvance: ₹${booking.advanceAmount};
+      const adminSMS = `🆕 Prepaid Booking:\nName: ${booking.name}\nMobile: ${booking.mobile}\nCar: ${booking.carType}\nFare: ₹${booking.totalFare}\nAdvance: ₹${booking.advanceAmount}`;
       await sendSMS('7000771918', adminSMS);
 
       return res.redirect(
-        ${process.env.PHONEPE_REDIRECT_URL}?bookingId=${booking._id}&name=${encodeURIComponent(
+        `${process.env.PHONEPE_REDIRECT_URL}?bookingId=${booking._id}&name=${encodeURIComponent(
           booking.name
-        )}&carType=${encodeURIComponent(booking.carType)}&distance=${booking.distance}&fare=${booking.totalFare}
+        )}&carType=${encodeURIComponent(booking.carType)}&distance=${booking.distance}&fare=${booking.totalFare}`
       );
     } else {
       console.warn('❌ [GET] Payment not successful:', result);
-      return res.redirect(${process.env.PHONEPE_REDIRECT_URL}/payment-failed);
+      return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
     }
   } catch (err) {
     console.error('❌ [GET] Callback error:', err.response?.data || err.message);
-    return res.redirect(${process.env.PHONEPE_REDIRECT_URL}/payment-failed);
+    return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
   }
 });
 
@@ -122,8 +122,8 @@ router.post('/cash-booking', async (req, res) => {
 
     await newBooking.save();
 
-    const smsText = Dear ${newBooking.name}, your booking is confirmed.\nFare: ₹${newBooking.totalFare}.\nPlease pay in cash to the driver.\nThanks - ItarsiTaxi.in;
-    const adminSMS = 🆕 COD Booking:\nName: ${newBooking.name}\nMobile: ${newBooking.mobile}\nCar: ${newBooking.carType}\nFare: ₹${newBooking.totalFare};
+    const smsText = `Dear ${newBooking.name}, your booking is confirmed.\nFare: ₹${newBooking.totalFare}.\nPlease pay in cash to the driver.\nThanks - ItarsiTaxi.in`;
+    const adminSMS = `🆕 COD Booking:\nName: ${newBooking.name}\nMobile: ${newBooking.mobile}\nCar: ${newBooking.carType}\nFare: ₹${newBooking.totalFare}`;
 
     await sendSMS(newBooking.mobile, smsText);
     await sendSMS('7000771918', adminSMS);
@@ -136,3 +136,4 @@ router.post('/cash-booking', async (req, res) => {
 });
 
 module.exports = router;
+
