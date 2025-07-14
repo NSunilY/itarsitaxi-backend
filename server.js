@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
+const path = require('path');
 
 dotenv.config();
 
@@ -13,12 +14,12 @@ const blogRoutes = require('./routes/blogRoutes');
 const distanceRoutes = require('./routes/distance');
 const testimonialRoutes = require('./routes/testimonialRoutes');
 const driverRoutes = require('./routes/driverRoutes');
-const paymentRoutes = require('./routes/paymentRoutes'); // ✅ NEW
+const paymentRoutes = require('./routes/paymentRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Trust proxy (for Render or HTTPS)
+// ✅ Trust proxy (for Render/HTTPS)
 app.set('trust proxy', 1);
 
 // ✅ Middleware
@@ -26,14 +27,13 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ Allowed Origins
+// ✅ CORS
 const allowedOrigins = [
   'http://localhost:3000',
   'https://itarsitaxi.in',
   'https://www.itarsitaxi.in'
 ];
 
-// ✅ CORS (for Bearer token — NOT using cookies)
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -46,7 +46,7 @@ app.use(cors({
   credentials: false,
 }));
 
-// ✅ Fallback Headers for preflight
+// ✅ Fallback headers for CORS preflight
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
@@ -78,7 +78,7 @@ app.use('/api/blogs', blogRoutes);
 app.use('/api/distance', distanceRoutes);
 app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/drivers', driverRoutes);
-app.use('/api/payment', paymentRoutes); // ✅ Payment route
+app.use('/api/payment', paymentRoutes);
 
 // ✅ Health check
 app.get('/', (req, res) => {
@@ -89,7 +89,7 @@ app.get('/api/ping', (req, res) => {
   res.status(200).send('pong');
 });
 
-// ✅ TEMP DEBUG ROUTE to check env values
+// ✅ TEMP ENV debug route
 app.get('/api/debug-env', (req, res) => {
   res.json({
     PHONEPE_CLIENT_ID: process.env.PHONEPE_CLIENT_ID || '❌ MISSING',
@@ -100,7 +100,13 @@ app.get('/api/debug-env', (req, res) => {
   });
 });
 
-// ✅ Start server
+// ✅ Serve frontend build
+app.use(express.static(path.join(__dirname, 'build')));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
+
+// ✅ Start Server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
