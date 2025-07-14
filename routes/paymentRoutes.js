@@ -52,12 +52,6 @@ router.post('/phonepe/initiate', async (req, res) => {
   }
 });
 
-// ✅ GET CALLBACK — when payment is cancelled or closed
-router.get('/phonepe/callback', (req, res) => {
-  console.warn('⚠️ GET /phonepe/callback hit — likely cancelled payment.');
-  return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
-});
-
 // ✅ HANDLE PhonePe REDIRECT (GET after payment)
 router.get('/phonepe/callback', async (req, res) => {
   const merchantOrderId = req.query.txnId;
@@ -102,7 +96,7 @@ router.get('/phonepe/callback', async (req, res) => {
       await sendSMS('7000771918', adminSMS);
 
       return res.redirect(
-        `${process.env.PHONEPE_REDIRECT_URL}/payment-success?bookingId=${booking._id}&name=${encodeURIComponent(
+        `${process.env.PHONEPE_REDIRECT_URL}?bookingId=${booking._id}&name=${encodeURIComponent(
           booking.name
         )}&carType=${encodeURIComponent(booking.carType)}&distance=${booking.distance}&fare=${booking.totalFare}`
       );
