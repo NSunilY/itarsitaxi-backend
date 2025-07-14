@@ -4,7 +4,6 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
-const path = require('path');
 
 dotenv.config();
 
@@ -19,7 +18,7 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Trust proxy (for HTTPS behind proxy like Render)
+// ✅ Trust proxy (for Render or HTTPS)
 app.set('trust proxy', 1);
 
 // ✅ Middleware
@@ -27,11 +26,11 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ CORS setup
+// ✅ CORS config
 const allowedOrigins = [
   'http://localhost:3000',
   'https://itarsitaxi.in',
-  'https://www.itarsitaxi.in'
+  'https://www.itarsitaxi.in',
 ];
 
 app.use(cors({
@@ -46,6 +45,7 @@ app.use(cors({
   credentials: false,
 }));
 
+// ✅ CORS preflight headers
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
@@ -60,18 +60,17 @@ app.use((req, res, next) => {
 // ✅ MongoDB Connection
 const mongoURI = process.env.MONGODB_URI;
 if (!mongoURI) {
-  console.error('❌ MONGODB_URI not set');
+  console.error('❌ MONGODB_URI not set in .env');
   process.exit(1);
 }
-
 mongoose.connect(mongoURI)
   .then(() => console.log('✅ MongoDB connected'))
-  .catch((err) => {
+  .catch(err => {
     console.error('❌ MongoDB error:', err.message);
     process.exit(1);
   });
 
-// ✅ API routes
+// ✅ Routes
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/blogs', blogRoutes);
@@ -80,25 +79,13 @@ app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/drivers', driverRoutes);
 app.use('/api/payment', paymentRoutes);
 
-// ✅ Health check + debug
-app.get('/api/ping', (req, res) => res.send('pong'));
-app.get('/api/debug-env', (req, res) => {
-  res.json({
-    PHONEPE_CLIENT_ID: process.env.PHONEPE_CLIENT_ID || '❌ MISSING',
-    PHONEPE_CLIENT_SECRET: process.env.PHONEPE_CLIENT_SECRET ? '✅ PRESENT' : '❌ MISSING',
-    PHONEPE_MERCHANT_ID: process.env.PHONEPE_MERCHANT_ID || '❌ MISSING',
-    PHONEPE_SALT_KEY: process.env.PHONEPE_SALT_KEY ? '✅ PRESENT' : '❌ MISSING',
-    PHONEPE_SALT_INDEX: process.env.PHONEPE_SALT_INDEX || '❌ MISSING',
-  });
+// ✅ Health check
+app.get('/', (req, res) => {
+  res.send('✅ ItarsiTaxi Backend is Live');
 });
 
-// ✅ Serve frontend (assumes React build is in root /build folder)
-const buildPath = path.join(__dirname, 'build');
-app.use(express.static(buildPath));
-
-// ✅ Safe fallback for all non-API routes
-app.get('/*', (req, res) => {
-  res.sendFile(path.join(buildPath, 'index.html'));
+app.get('/api/ping', (req, res) => {
+  res.status(200).send('pong');
 });
 
 // ✅ Start server
