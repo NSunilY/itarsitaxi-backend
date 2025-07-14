@@ -30,11 +30,12 @@ router.post('/phonepe/initiate', async (req, res) => {
 
     const merchantOrderId = uuidv4();
 
-    const request = StandardCheckoutPayRequest.builder()
-      .merchantTransactionId(merchantOrderId)
-      .amount(amount * 100)
-      .redirectUrl(`${process.env.PHONEPE_CALLBACK_URL}?txnId=${merchantOrderId}`)
-      .build();
+const request = StandardCheckoutPayRequest.builder()
+  .merchantId(process.env.PHONEPE_MERCHANT_ID) // ✅ required in v2.0.2
+  .merchantTransactionId(merchantOrderId)      // ✅ now works correctly
+  .amount(amount * 100)
+  .redirectUrl(`${process.env.PHONEPE_CALLBACK_URL}?txnId=${merchantOrderId}`)
+  .build();
 
     const response = await client.pay(request);
     const redirectUrl = response.redirectUrl;
