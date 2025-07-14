@@ -7,18 +7,23 @@ const sendSMS = async (number, message) => {
       'https://www.fast2sms.com/dev/bulkV2',
       {
         message,
-        language: 'english', // ✅ Force English language
-        route: 'q',          // ✅ Quick SMS route
-        numbers: number,     // ✅ Should be comma-separated string or plain number
+        language: 'english',
+        route: 'q',
+        numbers: Array.isArray(number) ? number.join(',') : number,
       },
       {
         headers: {
-          authorization: process.env.FAST2SMS_API_KEY,
+          'authorization': process.env.FAST2SMS_API_KEY,
+          'Content-Type': 'application/json',
         },
       }
     );
 
-    console.log(`✅ SMS sent to ${number}:`, response.data);
+    if (response.data.return === true) {
+      console.log(`✅ SMS sent to ${number}:`, response.data);
+    } else {
+      console.error(`❌ SMS failed for ${number}:`, response.data);
+    }
   } catch (error) {
     console.error(`❌ SMS sending failed to ${number}:`, error.response?.data || error.message);
   }
