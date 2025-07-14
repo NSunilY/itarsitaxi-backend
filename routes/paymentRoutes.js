@@ -33,7 +33,7 @@ router.post('/phonepe/initiate', async (req, res) => {
     const request = StandardCheckoutPayRequest.builder()
       .merchantOrderId(merchantOrderId)
       .amount(amount * 100)
-      .redirectUrl(${process.env.PHONEPE_CALLBACK_URL}?txnId=${merchantOrderId})
+.redirectUrl(`${process.env.PHONEPE_CALLBACK_URL}?txnId=${merchantOrderId}`)
       .build();
 
     const response = await client.pay(request);
