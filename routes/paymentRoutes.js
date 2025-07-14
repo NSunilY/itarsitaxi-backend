@@ -12,7 +12,7 @@ const {
   Env,
 } = require('pg-sdk-node');
 
-// ✅ PhonePe SDK Client (v2.0.2)
+// ✅ PhonePe client setup
 const client = StandardCheckoutClient.getInstance(
   process.env.PHONEPE_CLIENT_ID,
   process.env.PHONEPE_CLIENT_SECRET,
@@ -31,7 +31,7 @@ router.post('/phonepe/initiate', async (req, res) => {
     const merchantOrderId = uuidv4();
 
     const request = StandardCheckoutPayRequest.builder()
-      .merchantOrderId(merchantOrderId)
+      .merchantTransactionId(merchantOrderId)
       .amount(amount * 100)
       .redirectUrl(`${process.env.PHONEPE_CALLBACK_URL}?txnId=${merchantOrderId}`)
       .build();
@@ -52,29 +52,27 @@ router.post('/phonepe/initiate', async (req, res) => {
   }
 });
 
-// ✅ HANDLE PhonePe REDIRECT
+// ✅ HANDLE REDIRECT AFTER PAYMENT
 router.get('/phonepe/callback', async (req, res) => {
   const merchantOrderId = req.query.txnId;
-
   console.log('📩 [GET] PhonePe redirect received — txnId:', merchantOrderId);
 
   if (!merchantOrderId) {
-    console.warn('⚠️ Missing txnId in query — treating as failure');
-    return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
+    return res.redirect('https://itarsitaxi.in/payment-failed');
   }
 
   try {
-    const statusRes = await client.getStatus(merchantOrderId); // ✅ Correct for v2.0.2
+    const statusRes = await client.status(merchantOrderId);
     const result = statusRes.data;
 
-    console.log('📦 [GET] Payment status result:', result);
+    console.log('📦 Payment status result:', result);
 
     if (result.success && result.code === 'PAYMENT_SUCCESS') {
       const tempBookingData = req.app.locals.tempBookings?.[merchantOrderId];
 
       if (!tempBookingData) {
-        console.error('❌ [GET] No temp booking data found for txnId:', merchantOrderId);
-        return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
+        console.error('❌ No temp booking data found for txnId:', merchantOrderId);
+        return res.redirect('https://itarsitaxi.in/payment-failed');
       }
 
       const booking = new Booking({
@@ -85,28 +83,26 @@ router.get('/phonepe/callback', async (req, res) => {
 
       await booking.save();
 
-      console.log(`✅ [GET] Booking saved: ${booking._id}`);
+      console.log(`✅ Booking saved: ${booking._id}`);
 
-      // 🔔 SMS to customer
       const customerSMS = `Dear ${booking.name}, your prepaid booking is confirmed.\nAdvance Paid: ₹${booking.advanceAmount}\nTotal Fare: ₹${booking.totalFare}.\nThanks - ItarsiTaxi.in`;
-      await sendSMS(booking.mobile, customerSMS);
-
-      // 🔔 SMS to admin
       const adminSMS = `🆕 Prepaid Booking:\nName: ${booking.name}\nMobile: ${booking.mobile}\nCar: ${booking.carType}\nFare: ₹${booking.totalFare}\nAdvance: ₹${booking.advanceAmount}`;
+
+      await sendSMS(booking.mobile, customerSMS);
       await sendSMS('7000771918', adminSMS);
 
       return res.redirect(
-        `${process.env.PHONEPE_REDIRECT_URL}/payment-success?bookingId=${booking._id}&name=${encodeURIComponent(
+        `https://itarsitaxi.in/payment-success?bookingId=${booking._id}&name=${encodeURIComponent(
           booking.name
         )}&carType=${encodeURIComponent(booking.carType)}&distance=${booking.distance}&fare=${booking.totalFare}`
       );
     } else {
-      console.warn('❌ [GET] Payment not successful:', result);
-      return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
+      console.warn('❌ Payment not successful:', result);
+      return res.redirect('https://itarsitaxi.in/payment-failed');
     }
   } catch (err) {
     console.error('❌ Callback error:', err.response?.data || err.message);
-    return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
+    return res.redirect('https://itarsitaxi.in/payment-failed');
   }
 });
 
