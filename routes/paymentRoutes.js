@@ -1,4 +1,3 @@
-// routes/paymentRoutes.js
 const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
@@ -38,7 +37,6 @@ router.post('/phonepe/initiate', async (req, res) => {
       .build();
 
     const response = await client.pay(request);
-
     const redirectUrl = response.redirectUrl;
 
     // Store booking data temporarily
@@ -65,15 +63,27 @@ router.get('/phonepe/callback', async (req, res) => {
     return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
   }
 
+  const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  let result;
+
   try {
-    const statusRes = await client.status(merchantOrderId);
-    const result = statusRes.data;
-    console.log('📦 [GET] Payment status result:', result);
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      console.log(`⏳ Attempt ${attempt} — Checking payment status for ${merchantOrderId}`);
+      const statusRes = await client.status(merchantOrderId);
+      result = statusRes.data;
+
+      if (result.success && result.code === 'PAYMENT_SUCCESS') {
+        console.log('✅ Payment confirmed by PhonePe');
+        break;
+      }
+
+      await wait(2000);
+    }
 
     if (result.success && result.code === 'PAYMENT_SUCCESS') {
       const tempBookingData = req.app.locals.tempBookings?.[merchantOrderId];
       if (!tempBookingData) {
-        console.error('❌ [GET] No temp booking data found for txnId:', merchantOrderId);
+        console.error('❌ No temp booking data found for txnId:', merchantOrderId);
         return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
       }
 
@@ -84,7 +94,7 @@ router.get('/phonepe/callback', async (req, res) => {
       });
 
       await booking.save();
-      console.log(`✅ [GET] Booking saved: ${booking._id}`);
+      console.log(`✅ Booking saved: ${booking._id}`);
 
       const customerSMS = `Dear ${booking.name}, your prepaid booking is confirmed.\nAdvance Paid: ₹${booking.advanceAmount}\nTotal Fare: ₹${booking.totalFare}.\nThanks - ItarsiTaxi.in`;
       const adminSMS = `🆕 Prepaid Booking:\nName: ${booking.name}\nMobile: ${booking.mobile}\nCar: ${booking.carType}\nFare: ₹${booking.totalFare}\nAdvance: ₹${booking.advanceAmount}`;
@@ -92,16 +102,16 @@ router.get('/phonepe/callback', async (req, res) => {
       await sendSMS('7000771918', adminSMS);
 
       return res.redirect(
-        `${process.env.PHONEPE_REDIRECT_URL}?bookingId=${booking._id}&name=${encodeURIComponent(
+        `${process.env.PHONEPE_REDIRECT_URL}/payment-success?bookingId=${booking._id}&name=${encodeURIComponent(
           booking.name
         )}&carType=${encodeURIComponent(booking.carType)}&distance=${booking.distance}&fare=${booking.totalFare}`
       );
     } else {
-      console.warn('❌ [GET] Payment not successful:', result);
+      console.warn('❌ Final result — Payment not successful:', result);
       return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
     }
   } catch (err) {
-    console.error('❌ [GET] Callback error:', err.response?.data || err.message);
+    console.error('❌ Callback error:', err.response?.data || err.message);
     return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
   }
 });
@@ -109,6 +119,8 @@ router.get('/phonepe/callback', async (req, res) => {
 // ✅ POST: PhonePe Webhook
 router.post('/phonepe/webhook', async (req, res) => {
   try {
+    console.log('📥 [Webhook] Incoming webhook hit:', JSON.stringify(req.body, null, 2));
+
     const receivedSignature = req.headers.authorization?.replace('SHA256 ', '');
     const username = process.env.PHONEPE_WEBHOOK_USER;
     const password = process.env.PHONEPE_WEBHOOK_PASS;
