@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const Booking = require('../models/Booking');
 const sendSMS = require('../utils/sendSMS');
 const crypto = require('crypto');
+const axios = require('axios');
 require('dotenv').config();
 
 const {
@@ -12,7 +13,7 @@ const {
   Env,
 } = require('pg-sdk-node');
 
-// ✅ PhonePe SDK Client
+// ✅ PhonePe SDK Client for initiating payment only
 const client = StandardCheckoutClient.getInstance(
   process.env.PHONEPE_CLIENT_ID,
   process.env.PHONEPE_CLIENT_SECRET,
@@ -69,7 +70,25 @@ router.get('/phonepe/callback', async (req, res) => {
   try {
     for (let attempt = 1; attempt <= 5; attempt++) {
       console.log(`⏳ Attempt ${attempt} — Checking payment status for ${merchantOrderId}`);
-      const statusRes = await client.status(merchantOrderId);
+
+      const urlPath = `/pg/v1/status/${process.env.PHONEPE_MERCHANT_ID}/${merchantOrderId}`;
+      const fullUrl = `https://api.phonepe.com/apis/hermes${urlPath}`;
+      const base64Payload = '';
+      const saltKey = process.env.PHONEPE_CLIENT_SECRET;
+      const saltIndex = process.env.PHONEPE_CLIENT_ID;
+
+      const xVerify = crypto
+        .createHash('sha256')
+        .update(urlPath + base64Payload + saltKey)
+        .digest('hex') + `###${saltIndex}`;
+
+      const statusRes = await axios.get(fullUrl, {
+        headers: {
+          'X-VERIFY': xVerify,
+          'X-MERCHANT-ID': process.env.PHONEPE_MERCHANT_ID,
+        }
+      });
+
       result = statusRes.data;
 
       if (result.success && result.code === 'PAYMENT_SUCCESS') {
