@@ -64,45 +64,36 @@ router.get('/phonepe/callback', async (req, res) => {
     return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
   }
 
-  const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-  let result;
+  const urlPath = `/pg/v1/status/${process.env.PHONEPE_MERCHANT_ID}/${merchantOrderId}`;
+  const fullUrl = `https://api.phonepe.com/apis/hermes${urlPath}`;
+  const saltKey = process.env.PHONEPE_CLIENT_SECRET;
+  const saltIndex = process.env.PHONEPE_CLIENT_ID;
+
+  const xVerify = crypto
+    .createHash('sha256')
+    .update(urlPath + saltKey) // ✅ correct way (no payload)
+    .digest('hex') + `###${saltIndex}`;
 
   try {
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      console.log(`⏳ Attempt ${attempt} — Checking payment status for ${merchantOrderId}`);
+    console.log('🧪 Calling PhonePe status API:', fullUrl);
+    console.log('🔐 X-VERIFY:', xVerify);
+    console.log('🆔 X-MERCHANT-ID:', process.env.PHONEPE_MERCHANT_ID);
 
-      const urlPath = `/pg/v1/status/${process.env.PHONEPE_MERCHANT_ID}/${merchantOrderId}`;
-      const fullUrl = `https://api.phonepe.com/apis/hermes${urlPath}`;
-      const base64Payload = '';
-      const saltKey = process.env.PHONEPE_CLIENT_SECRET;
-      const saltIndex = process.env.PHONEPE_CLIENT_ID;
+    const statusResponse = await axios.get(fullUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-VERIFY': xVerify,
+        'X-MERCHANT-ID': process.env.PHONEPE_MERCHANT_ID,
+      },
+    });
 
-      const xVerify = crypto
-        .createHash('sha256')
-        .update(urlPath + base64Payload + saltKey)
-        .digest('hex') + `###${saltIndex}`;
-
-      const statusRes = await axios.get(fullUrl, {
-        headers: {
-          'X-VERIFY': xVerify,
-          'X-MERCHANT-ID': process.env.PHONEPE_MERCHANT_ID,
-        }
-      });
-
-      result = statusRes.data;
-
-      if (result.success && result.code === 'PAYMENT_SUCCESS') {
-        console.log('✅ Payment confirmed by PhonePe');
-        break;
-      }
-
-      await wait(2000);
-    }
+    const result = statusResponse.data;
+    console.log('📦 [GET] Payment status result:', result);
 
     if (result.success && result.code === 'PAYMENT_SUCCESS') {
       const tempBookingData = req.app.locals.tempBookings?.[merchantOrderId];
       if (!tempBookingData) {
-        console.error('❌ No temp booking data found for txnId:', merchantOrderId);
+        console.error('❌ [GET] No temp booking data found for txnId:', merchantOrderId);
         return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
       }
 
@@ -113,7 +104,7 @@ router.get('/phonepe/callback', async (req, res) => {
       });
 
       await booking.save();
-      console.log(`✅ Booking saved: ${booking._id}`);
+      console.log(`✅ [GET] Booking saved: ${booking._id}`);
 
       const customerSMS = `Dear ${booking.name}, your prepaid booking is confirmed.\nAdvance Paid: ₹${booking.advanceAmount}\nTotal Fare: ₹${booking.totalFare}.\nThanks - ItarsiTaxi.in`;
       const adminSMS = `🆕 Prepaid Booking:\nName: ${booking.name}\nMobile: ${booking.mobile}\nCar: ${booking.carType}\nFare: ₹${booking.totalFare}\nAdvance: ₹${booking.advanceAmount}`;
@@ -121,12 +112,12 @@ router.get('/phonepe/callback', async (req, res) => {
       await sendSMS('7000771918', adminSMS);
 
       return res.redirect(
-        `${process.env.PHONEPE_REDIRECT_URL}/payment-success?bookingId=${booking._id}&name=${encodeURIComponent(
+        `${process.env.PHONEPE_REDIRECT_URL}?bookingId=${booking._id}&name=${encodeURIComponent(
           booking.name
         )}&carType=${encodeURIComponent(booking.carType)}&distance=${booking.distance}&fare=${booking.totalFare}`
       );
     } else {
-      console.warn('❌ Final result — Payment not successful:', result);
+      console.warn('❌ [GET] Payment not successful:', result);
       return res.redirect(`${process.env.PHONEPE_REDIRECT_URL}/payment-failed`);
     }
   } catch (err) {
