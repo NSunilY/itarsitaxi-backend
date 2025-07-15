@@ -1,7 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
-const Booking = require('../models/booking'); // adjust path if needed
+const Booking = require('../models/Booking'); // adjust path if needed
 
 const {
   PHONEPE_CLIENT_ID,
