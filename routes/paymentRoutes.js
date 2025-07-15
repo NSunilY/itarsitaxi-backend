@@ -66,8 +66,8 @@ router.get('/phonepe/callback', async (req, res) => {
 
   const urlPath = `/pg/v1/status/${process.env.PHONEPE_MERCHANT_ID}/${merchantOrderId}`;
   const fullUrl = `https://api.phonepe.com/apis/hermes${urlPath}`;
-  const saltKey = process.env.PHONEPE_CLIENT_SECRET;
-  const saltIndex = process.env.PHONEPE_CLIENT_ID;
+const saltKey = process.env.PHONEPE_CLIENT_SECRET;
+const saltIndex = process.env.PHONEPE_SALT_INDEX; // ✅ NOT CLIENT_ID
 
   const xVerify = crypto
     .createHash('sha256')
