@@ -41,7 +41,6 @@ router.post('/phonepe/create-order', async (req, res) => {
 
     const safeBookingId = bookingId.toString().replace(/[^a-zA-Z0-9]/g, '');
 
-    // ✅ Add logs here
     console.log('💰 Booking Amount:', amount);
     console.log('🆔 Booking ID:', bookingId);
     console.log('🔐 Safe Booking ID:', safeBookingId);
@@ -50,7 +49,7 @@ router.post('/phonepe/create-order', async (req, res) => {
       merchantId: PHONEPE_MERCHANT_ID,
       merchantTransactionId: safeBookingId,
       merchantUserId: 'user_' + safeBookingId,
-      amount: amount * 100, // in paise
+      amount: amount * 100, // ✅ this must be top-level
       redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
       redirectMode: 'REDIRECT',
       callbackUrl: PHONEPE_CALLBACK_URL,
@@ -59,7 +58,6 @@ router.post('/phonepe/create-order', async (req, res) => {
       },
     });
 
-    // ✅ Log request payload
     console.log('📦 PhonePe Payload:', request);
 
     const response = await client.pay(request);
@@ -68,7 +66,7 @@ router.post('/phonepe/create-order', async (req, res) => {
     res.json({
       success: true,
       orderId: safeBookingId,
-      redirectUrl,
+      token: redirectUrl,
     });
 
   } catch (error) {
