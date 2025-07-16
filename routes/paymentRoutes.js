@@ -3,134 +3,125 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const Booking = require('../models/Booking');
+const sendSMS = require('../utils/sendSMS');
+require('dotenv').config();
 
+// 📦 PhonePe SDK Imports
 const {
   StandardCheckoutClient,
-  Env,
   StandardCheckoutPayRequest,
-  PgCheckoutPaymentInstrument,
-  PgCheckoutPaymentFlow,
+  Env
 } = require('pg-sdk-node');
 
-const {
-  PHONEPE_CLIENT_ID,
-  PHONEPE_CLIENT_SECRET,
-  PHONEPE_CLIENT_VERSION,
-  PHONEPE_MERCHANT_ID,
-  PHONEPE_ENV,
-  PHONEPE_REDIRECT_URL,
-  PHONEPE_CALLBACK_URL,
-} = process.env;
-
-// 🌍 Set environment
-const env = PHONEPE_ENV === 'PRODUCTION' ? Env.PRODUCTION : Env.SANDBOX;
-
-// 🚀 Create PhonePe SDK client
+// 🌐 PhonePe Client Setup
 const client = StandardCheckoutClient.getInstance(
-  PHONEPE_CLIENT_ID,
-  PHONEPE_CLIENT_SECRET,
-  parseInt(PHONEPE_CLIENT_VERSION),
-  env
+  process.env.PHONEPE_CLIENT_ID,
+  process.env.PHONEPE_CLIENT_SECRET,
+  parseInt(process.env.PHONEPE_CLIENT_VERSION || '1'),
+  process.env.PHONEPE_ENV === 'PRODUCTION' ? Env.PRODUCTION : Env.SANDBOX
 );
 
-// 📦 Create PhonePe Payment Order
-router.post('/phonepe/create-order', async (req, res) => {
-  const { amount, bookingId } = req.body;
+const tempBookingStore = {}; // 🔒 In-memory booking storage before payment
+
+// 🟢 INITIATE PAYMENT
+router.post('/phonepe/initiate', async (req, res) => {
+  const { amount, bookingData } = req.body;
+
+  if (!amount || !bookingData) {
+    return res.status(400).json({ success: false, message: 'Invalid request' });
+  }
+
+  const merchantOrderId = uuidv4(); // unique transaction ID
+  const amountInPaise = amount * 100;
 
   try {
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ success: false, message: 'Invalid amount' });
-    }
-
-    const safeBookingId = bookingId.toString().replace(/[^a-zA-Z0-9]/g, '');
-    const amountInPaise = amount * 100;
-
-    console.log('💰 Booking Amount:', amount);
-    console.log('🆔 Booking ID:', bookingId);
-    console.log('🔐 Safe Booking ID:', safeBookingId);
-
-    const paymentInstrument = new PgCheckoutPaymentInstrument("PAY_PAGE");
-    const paymentFlow = new PgCheckoutPaymentFlow({
-      redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
-    });
-
-    const request = new StandardCheckoutPayRequest(
-      PHONEPE_MERCHANT_ID,
-      safeBookingId,
-      "user_" + safeBookingId,
-      amountInPaise,
-      `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
-      "REDIRECT",
-      PHONEPE_CALLBACK_URL,
-      paymentInstrument,
-      paymentFlow
-    );
-
-    console.log('📦 Final Request Payload:', JSON.stringify(request, null, 2));
+    // ✅ Safely build PhonePe request using SDK
+    const request = StandardCheckoutPayRequest.builder()
+      .merchantOrderId(merchantOrderId)
+      .amount(amountInPaise)
+      .redirectUrl(`${process.env.PHONEPE_REDIRECT_URL}?orderId=${merchantOrderId}`)
+      .callbackUrl(process.env.PHONEPE_CALLBACK_URL)
+      .build();
 
     const response = await client.pay(request);
-    const redirectUrl = response.instrumentResponse.redirectInfo.url;
 
-    res.json({
+    // 🔒 Save booking temporarily
+    tempBookingStore[merchantOrderId] = bookingData;
+
+    return res.json({
       success: true,
-      orderId: safeBookingId,
-      token: redirectUrl,
+      redirectUrl: response.redirectUrl,
+      orderId: merchantOrderId
     });
-
-  } catch (error) {
-    console.error('❌ PhonePe Create Order Error:', {
-      message: error.message,
-      responseData: error?.response?.data,
-      fullError: error,
-    });
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create order',
-      error: error?.response?.data || error.message,
-    });
+  } catch (err) {
+    console.error('❌ PhonePe SDK Error:', err);
+    return res.status(500).json({ success: false, message: 'Payment initiation failed' });
   }
 });
 
-// 🔁 Status Check Endpoint
-router.get('/phonepe/status/:orderId', async (req, res) => {
-  const { orderId } = req.params;
+// 🟣 CALLBACK HANDLER
+router.post('/phonepe/callback', async (req, res) => {
+  const { transactionId, merchantOrderId, code } = req.body;
+
+  console.log('📩 PhonePe callback received:', req.body);
+
+  if (code !== 'PAYMENT_SUCCESS') {
+    return res.redirect('/payment-failed');
+  }
+
+  const bookingData = tempBookingStore[merchantOrderId];
+
+  if (!bookingData) {
+    return res.status(400).send('⚠️ No booking data found for this transaction');
+  }
 
   try {
-    const response = await client.getOrderStatus(orderId);
-    return res.json({ success: true, status: response.state });
+    const newBooking = new Booking({
+      ...bookingData,
+      transactionId,
+      paymentStatus: 'Paid'
+    });
+
+    await newBooking.save();
+
+    const smsText = `Dear ${newBooking.name}, your prepaid booking is confirmed.\nFare: ₹${newBooking.totalFare}.\nThanks for choosing ItarsiTaxi.in!`;
+    await sendSMS(newBooking.mobile, smsText);
+
+    // Clean up memory
+    delete tempBookingStore[merchantOrderId];
+
+    return res.redirect(
+      `/thank-you?name=${newBooking.name}&carType=${newBooking.carType}&fare=${newBooking.totalFare}`
+    );
   } catch (err) {
-    console.error('❌ PhonePe status check failed:', err);
-    return res.status(500).json({ success: false });
+    console.error('❌ Error saving booking:', err);
+    return res.status(500).send('Booking failed. Please contact support.');
   }
 });
 
-// 📩 Webhook / Callback Handler
-router.post('/payment/phonepe/callback', async (req, res) => {
+// 🟢 CASH BOOKING HANDLER
+router.post('/cash-booking', async (req, res) => {
+  const bookingData = req.body;
+
+  if (!bookingData) {
+    return res.status(400).json({ success: false, message: 'Invalid booking data' });
+  }
+
   try {
-    const authHeader = req.headers.authorization;
-    const bodyStr = JSON.stringify(req.body);
+    const newBooking = new Booking({
+      ...bookingData,
+      paymentStatus: 'Cash on Arrival'
+    });
 
-    const callback = client.validateCallback(
-      PHONEPE_CLIENT_ID,
-      PHONEPE_CLIENT_SECRET,
-      authHeader,
-      bodyStr
-    );
+    await newBooking.save();
 
-    const { orderId, state } = callback.payload;
+    const smsText = `Dear ${newBooking.name}, your booking is confirmed (Cash on Arrival).\nFare: ₹${newBooking.totalFare}.\nThanks for choosing ItarsiTaxi.in!`;
+    await sendSMS(newBooking.mobile, smsText);
 
-    await Booking.findOneAndUpdate(
-      { bookingId: orderId },
-      {
-        paymentStatus: state === 'COMPLETED' ? 'Success' : 'Failed',
-      }
-    );
-
-    return res.sendStatus(200);
+    return res.status(200).json({ success: true, message: 'Booking confirmed' });
   } catch (err) {
-    console.error('❌ PhonePe callback error:', err);
-    return res.sendStatus(400);
+    console.error('❌ Cash booking error:', err);
+    return res.status(500).json({ success: false, message: 'Booking failed' });
   }
 });
 
