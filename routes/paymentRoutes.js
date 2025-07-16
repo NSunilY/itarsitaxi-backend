@@ -52,7 +52,7 @@ const request = new StandardCheckoutPayRequest({
   merchantId: PHONEPE_MERCHANT_ID,
   merchantTransactionId: safeBookingId,
   merchantUserId: "user_" + safeBookingId,
-  amount: amountInPaise, // 🔥 Correct spot
+  amount: amountInPaise,
   redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
   redirectMode: "REDIRECT",
   callbackUrl: PHONEPE_CALLBACK_URL,
