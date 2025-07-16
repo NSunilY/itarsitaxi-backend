@@ -57,8 +57,13 @@ router.post('/phonepe/initiate', async (req, res) => {
   }
 });
 
-// ✅ Secure callback for PhonePe
-router.post('/phonepe/callback', async (req, res) => {
+// ✅ USER REDIRECT HANDLER (no verification here)
+router.get('/phonepe/callback', (req, res) => {
+  return res.redirect('/payment-status'); // simple UI, logic handled elsewhere
+});
+
+// ✅ WEBHOOK HANDLER — from PhonePe servers
+router.post('/phonepe/webhook', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     const bodyStr = JSON.stringify(req.body);
@@ -71,8 +76,6 @@ router.post('/phonepe/callback', async (req, res) => {
     );
 
     const { orderId, state, transactionId } = callback.payload;
-
-    console.log('📩 Validated callback:', callback.payload);
 
     const bookingData = tempBookingStore[orderId];
     if (!bookingData) {
@@ -95,18 +98,13 @@ router.post('/phonepe/callback', async (req, res) => {
       );
 
       delete tempBookingStore[orderId];
-
-      return res.redirect(
-        `/thank-you?name=${newBooking.name}&carType=${newBooking.carType}&fare=${newBooking.totalFare}`
-      );
-    } else {
-      return res.redirect('/payment-failed');
     }
+
+    return res.sendStatus(200);
   } catch (err) {
-    console.error('❌ PhonePe callback error:', err);
-    return res.redirect('/payment-failed');
+    console.error('❌ Webhook callback error:', err);
+    return res.sendStatus(400);
   }
 });
-
 module.exports = router;
 
