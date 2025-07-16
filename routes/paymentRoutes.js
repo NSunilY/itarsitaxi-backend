@@ -32,10 +32,12 @@ router.post('/phonepe/initiate', async (req, res) => {
   const merchantOrderId = uuidv4();
 
   try {
+    const redirectUrlWithOrder = `${process.env.PHONEPE_REDIRECT_URL}?merchantOrderId=${merchantOrderId}`;
+
     const request = StandardCheckoutPayRequest.builder()
       .merchantOrderId(merchantOrderId)
       .amount(amount * 100)
-      .redirectUrl(process.env.PHONEPE_REDIRECT_URL)
+      .redirectUrl(redirectUrlWithOrder)
       .build({
         callbackUrl: process.env.PHONEPE_CALLBACK_URL,
       });
@@ -55,9 +57,10 @@ router.post('/phonepe/initiate', async (req, res) => {
   }
 });
 
-// ✅ USER REDIRECT HANDLER (not used for verification)
+// ✅ USER REDIRECT HANDLER
 router.get('/phonepe/callback', (req, res) => {
-  return res.redirect('/payment-status');
+  const merchantOrderId = req.query.merchantOrderId;
+  return res.redirect(`/payment-status?merchantOrderId=${merchantOrderId}`);
 });
 
 // ✅ WEBHOOK HANDLER
