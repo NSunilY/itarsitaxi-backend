@@ -45,21 +45,26 @@ router.post('/phonepe/create-order', async (req, res) => {
     console.log('🆔 Booking ID:', bookingId);
     console.log('🔐 Safe Booking ID:', safeBookingId);
 
+const { StandardCheckoutPayRequest } = require("pg-sdk-node");
+
+const amountInPaise = amount * 100;
+
 const request = new StandardCheckoutPayRequest({
   merchantId: PHONEPE_MERCHANT_ID,
   merchantTransactionId: safeBookingId,
-  merchantUserId: 'user_' + safeBookingId,
-  amount: amount * 100, // required at top level
+  merchantUserId: "user_" + safeBookingId,
+  amount: amountInPaise, // ✅ THIS GOES AT TOP LEVEL
   redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
-  redirectMode: 'REDIRECT',
+  redirectMode: "REDIRECT",
   callbackUrl: PHONEPE_CALLBACK_URL,
   paymentInstrument: {
-    type: 'PAY_PAGE',
+    type: "PAY_PAGE",
   },
 });
 
     console.log('📦 PhonePe Payload:', request);
-
+    console.log("✅ Request keys:", Object.keys(request));
+    console.log("✅ Full request:", JSON.stringify(request, null, 2));
 console.log('📤 Sending request to PhonePe with payload:', JSON.stringify(request, null, 2));
     const response = await client.pay(request);
     const redirectUrl = response.instrumentResponse.redirectInfo.url;
