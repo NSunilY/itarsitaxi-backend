@@ -2,6 +2,7 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
+const axios = require('axios');
 const Booking = require('../models/Booking');
 const {
   StandardCheckoutClient,
