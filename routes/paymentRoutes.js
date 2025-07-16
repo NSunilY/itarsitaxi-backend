@@ -65,23 +65,24 @@ router.post('/phonepe/callback', async (req, res) => {
   console.log('📩 PhonePe callback received:', req.body);
 
   const { payload } = req.body;
-  const { merchantOrderId, state, amount, paymentDetails } = payload;
+  const merchantOrderId = payload.merchantOrderId;
+  const transactionId = payload.paymentDetails?.[0]?.transactionId || '';
 
-  if (state !== 'COMPLETED') {
+  if (payload.state !== 'COMPLETED') {
     return res.redirect('/payment-failed');
   }
 
   const bookingData = tempBookingStore[merchantOrderId];
   if (!bookingData) {
-    return res.status(400).send('⚠️ No booking data found for this order');
+    return res.status(400).send('⚠️ No booking data found for this transaction');
   }
 
   try {
-const newBooking = new Booking({
-  ...bookingData,
-  paymentStatus: 'Success', // ✅ FIXED
-  transactionId,
-});
+    const newBooking = new Booking({
+      ...bookingData,
+      paymentStatus: 'Success',
+      transactionId,
+    });
 
     await newBooking.save();
 
@@ -90,7 +91,9 @@ const newBooking = new Booking({
 
     delete tempBookingStore[merchantOrderId];
 
-    res.redirect(`/thank-you?name=${newBooking.name}&carType=${newBooking.carType}&fare=${newBooking.totalFare}`);
+    res.redirect(
+      `/thank-you?name=${newBooking.name}&carType=${newBooking.carType}&fare=${newBooking.totalFare}`
+    );
   } catch (err) {
     console.error('❌ DB Save Error:', err);
     res.status(500).send('Booking failed. Please contact support.');
