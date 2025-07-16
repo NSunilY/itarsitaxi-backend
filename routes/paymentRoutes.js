@@ -12,7 +12,7 @@ const {
   Env,
 } = require('pg-sdk-node');
 
-// 🔧 Initialize PhonePe SDK Client
+// Initialize PhonePe SDK Client
 const client = StandardCheckoutClient.getInstance(
   process.env.PHONEPE_CLIENT_ID,
   process.env.PHONEPE_CLIENT_SECRET,
@@ -20,12 +20,11 @@ const client = StandardCheckoutClient.getInstance(
   process.env.PHONEPE_ENV === 'PRODUCTION' ? Env.PRODUCTION : Env.SANDBOX
 );
 
-const tempBookingStore = {}; // Holds booking data until payment callback
+const tempBookingStore = {};
 
-// ✅ Initiate PhonePe Payment
+// ✅ Initiate Payment
 router.post('/phonepe/initiate', async (req, res) => {
   const { amount, bookingData } = req.body;
-
   if (!amount || !bookingData) {
     return res.status(400).json({ success: false, message: 'Invalid request' });
   }
@@ -38,50 +37,50 @@ router.post('/phonepe/initiate', async (req, res) => {
       .amount(amount * 100)
       .redirectUrl(process.env.PHONEPE_REDIRECT_URL)
       .build({
-        callbackUrl: process.env.PHONEPE_CALLBACK_URL
+        callbackUrl: process.env.PHONEPE_CALLBACK_URL,
       });
 
     const response = await client.pay(request);
 
-    // Store booking data temporarily
+    // Temporarily store booking data
     tempBookingStore[merchantOrderId] = bookingData;
 
     res.json({
       success: true,
-      redirectUrl: response.redirectUrl
+      redirectUrl: response.redirectUrl,
     });
-
   } catch (err) {
     console.error('❌ PhonePe SDK Error:', err);
     res.status(500).json({ success: false, message: 'Payment initiation failed' });
   }
 });
 
-// ✅ USER REDIRECT HANDLER (no verification here)
+// ✅ USER REDIRECT HANDLER (not used for verification)
 router.get('/phonepe/callback', (req, res) => {
-  return res.redirect('/payment-status'); // simple UI, logic handled elsewhere
+  return res.redirect('/payment-status');
 });
 
-// ✅ WEBHOOK HANDLER — from PhonePe servers
+// ✅ WEBHOOK HANDLER
 router.post('/phonepe/callback', async (req, res) => {
-  const { transactionId, merchantOrderId, code } = req.body;
-
   console.log('📩 PhonePe callback received:', req.body);
 
-  if (code !== 'PAYMENT_SUCCESS') {
+  const { payload } = req.body;
+  const { merchantOrderId, state, amount, paymentDetails } = payload;
+
+  if (state !== 'COMPLETED') {
     return res.redirect('/payment-failed');
   }
 
   const bookingData = tempBookingStore[merchantOrderId];
   if (!bookingData) {
-    return res.status(400).send('⚠️ No booking data found for this transaction');
+    return res.status(400).send('⚠️ No booking data found for this order');
   }
 
   try {
     const newBooking = new Booking({
       ...bookingData,
       paymentStatus: 'Paid',
-      transactionId,
+      transactionId: paymentDetails?.[0]?.transactionId || '',
     });
 
     await newBooking.save();
@@ -91,13 +90,12 @@ router.post('/phonepe/callback', async (req, res) => {
 
     delete tempBookingStore[merchantOrderId];
 
-    res.redirect(
-      `/thank-you?name=${newBooking.name}&carType=${newBooking.carType}&fare=${newBooking.totalFare}`
-    );
+    res.redirect(`/thank-you?name=${newBooking.name}&carType=${newBooking.carType}&fare=${newBooking.totalFare}`);
   } catch (err) {
     console.error('❌ DB Save Error:', err);
     res.status(500).send('Booking failed. Please contact support.');
   }
 });
+
 module.exports = router;
 
