@@ -35,14 +35,18 @@ router.post('/phonepe/create-order', async (req, res) => {
   const { amount, bookingId } = req.body;
 
   try {
-    const orderId = bookingId; // use bookingId as order ID
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid amount' });
+    }
+
+    const safeBookingId = bookingId.toString().replace(/[^a-zA-Z0-9]/g, '');
 
     const request = new StandardCheckoutPayRequest({
       merchantId: PHONEPE_MERCHANT_ID,
-      merchantTransactionId: orderId,
-      merchantUserId: 'user_' + bookingId,
+      merchantTransactionId: safeBookingId,
+      merchantUserId: 'user_' + safeBookingId,
       amount: amount * 100, // in paise
-      redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${orderId}`,
+      redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
       redirectMode: 'REDIRECT',
       callbackUrl: PHONEPE_CALLBACK_URL,
       paymentInstrument: {
@@ -55,7 +59,7 @@ router.post('/phonepe/create-order', async (req, res) => {
 
     res.json({
       success: true,
-      orderId,
+      orderId: safeBookingId,
       redirectUrl,
     });
   } catch (error) {
