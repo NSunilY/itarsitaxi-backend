@@ -47,28 +47,25 @@ router.post('/phonepe/create-order', async (req, res) => {
 
     const amountInPaise = amount * 100;
 
-    // ✅ Create payload with redirectUrl also inside merchantUrls
-    const request = {
-      merchantOrderId: {
-        merchantId: PHONEPE_MERCHANT_ID,
-        merchantTransactionId: safeBookingId,
-        merchantUserId: 'user_' + safeBookingId,
-        amount: amountInPaise,
-        redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
-        redirectMode: 'REDIRECT',
-        callbackUrl: PHONEPE_CALLBACK_URL,
-        paymentInstrument: {
-          type: 'PAY_PAGE',
-        },
-      },
-      amount: amountInPaise,
-      paymentFlow: {
-        type: 'PG_CHECKOUT',
-        merchantUrls: {
-          redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
-        },
-      },
-    };
+// Fix: Use top-level fields for the payment request
+const request = new StandardCheckoutPayRequest({
+  merchantId: PHONEPE_MERCHANT_ID,
+  merchantTransactionId: safeBookingId,
+  merchantUserId: "user_" + safeBookingId,
+  amount: amountInPaise, // 🔥 Correct spot
+  redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
+  redirectMode: "REDIRECT",
+  callbackUrl: PHONEPE_CALLBACK_URL,
+  paymentInstrument: {
+    type: "PAY_PAGE"
+  },
+  paymentFlow: {
+    type: "PG_CHECKOUT",
+    merchantUrls: {
+      redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`
+    }
+  }
+});
 
     console.log('📦 PhonePe Payload:', request);
     console.log('✅ Request keys:', Object.keys(request));
