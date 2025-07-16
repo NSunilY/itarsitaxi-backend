@@ -45,34 +45,43 @@ router.post('/phonepe/create-order', async (req, res) => {
     console.log('🆔 Booking ID:', bookingId);
     console.log('🔐 Safe Booking ID:', safeBookingId);
 
-const { StandardCheckoutPayRequest } = require("pg-sdk-node");
+    const amountInPaise = amount * 100;
 
-const amountInPaise = amount * 100;
-
-const request = new StandardCheckoutPayRequest({
-  merchantId: PHONEPE_MERCHANT_ID,
-  merchantTransactionId: safeBookingId,
-  merchantUserId: "user_" + safeBookingId,
-  amount: amountInPaise, // ✅ THIS GOES AT TOP LEVEL
-  redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
-  redirectMode: "REDIRECT",
-  callbackUrl: PHONEPE_CALLBACK_URL,
-  paymentInstrument: {
-    type: "PAY_PAGE",
-  },
-});
+    // ✅ Create payload with redirectUrl also inside merchantUrls
+    const request = {
+      merchantOrderId: {
+        merchantId: PHONEPE_MERCHANT_ID,
+        merchantTransactionId: safeBookingId,
+        merchantUserId: 'user_' + safeBookingId,
+        amount: amountInPaise,
+        redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
+        redirectMode: 'REDIRECT',
+        callbackUrl: PHONEPE_CALLBACK_URL,
+        paymentInstrument: {
+          type: 'PAY_PAGE',
+        },
+      },
+      amount: amountInPaise,
+      paymentFlow: {
+        type: 'PG_CHECKOUT',
+        merchantUrls: {
+          redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
+        },
+      },
+    };
 
     console.log('📦 PhonePe Payload:', request);
-    console.log("✅ Request keys:", Object.keys(request));
-    console.log("✅ Full request:", JSON.stringify(request, null, 2));
-console.log('📤 Sending request to PhonePe with payload:', JSON.stringify(request, null, 2));
+    console.log('✅ Request keys:', Object.keys(request));
+    console.log('✅ Full request:', JSON.stringify(request, null, 2));
+    console.log('📤 Sending request to PhonePe with payload:', JSON.stringify(request, null, 2));
+
     const response = await client.pay(request);
     const redirectUrl = response.instrumentResponse.redirectInfo.url;
 
     res.json({
       success: true,
       orderId: safeBookingId,
-      token: redirectUrl, // ✅ PhonePe calls this the redirect URL
+      token: redirectUrl,
     });
 
   } catch (error) {
@@ -89,6 +98,7 @@ console.log('📤 Sending request to PhonePe with payload:', JSON.stringify(requ
     });
   }
 });
+
 // 🔁 Status Check Endpoint
 router.get('/phonepe/status/:orderId', async (req, res) => {
   const { orderId } = req.params;
