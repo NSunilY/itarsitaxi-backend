@@ -33,34 +33,43 @@ router.post('/phonepe/create-order', async (req, res) => {
   const { amount, bookingId } = req.body;
 
   try {
-    const orderId = bookingId; // Use bookingId as PhonePe order ID
+    const token = await getAuthToken();
 
-    // Save initial booking if not already saved (optional safeguard)
-    const booking = await Booking.findOne({ bookingId });
-    if (!booking) {
-      await Booking.create({
-        bookingId,
-        amount,
-        paymentStatus: 'pending'
-      });
-    }
+    const orderId = bookingId; // use bookingId as orderId
+    const payload = {
+      merchantId: PHONEPE_MERCHANT_ID,
+      merchantTransactionId: orderId,
+      merchantUserId: bookingId,
+      amount: amount * 100, // ₹ to paise
+      redirectUrl: `${PHONEPE_REDIRECT_URL}/${orderId}`,
+      redirectMode: 'REDIRECT',
+      callbackUrl: PHONEPE_CALLBACK_URL,
+      paymentInstrument: {
+        type: 'PAY_PAGE',
+      },
+    };
 
-    const request = StandardCheckoutPayRequest.builder()
-      .merchantOrderId(orderId)
-      .amount(amount * 100) // Convert to paise
-      .redirectUrl(`${PHONEPE_REDIRECT_URL}?orderId=${orderId}`)
-      .build();
+    const orderResponse = await axios.post(
+      'https://api.phonepe.com/apis/pg/v1/orders',
+      payload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
-    const response = await client.pay(request);
+    const { token: orderToken } = orderResponse.data.data;
 
-    return res.json({
+    res.json({
       success: true,
       orderId,
-      redirectUrl: response.redirectUrl
+      token: orderToken,
     });
   } catch (error) {
-    console.error('PhonePe Create Order Error:', error);
-    return res.status(500).json({ success: false, message: 'Failed to create order' });
+    console.error('PhonePe Create Order Error:', error?.response?.data || error);
+    res.status(500).json({ success: false, message: 'Failed to create order' });
   }
 });
 

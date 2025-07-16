@@ -22,11 +22,11 @@ const bookingSchema = new mongoose.Schema({
   tripType: { type: String, default: '' },
 
   paymentMode: { type: String, required: true },
-  paymentStatus: {
-    type: String,
-    enum: ['Pending', 'Paid', 'Cash on Arrival'],
-    default: 'Pending'
-  },
+paymentStatus: {
+  type: String,
+  enum: ['Pending', 'Success', 'Failed'],
+  default: 'Pending',
+},
   transactionId: { type: String, default: '' },
 
   status: {
