@@ -41,6 +41,11 @@ router.post('/phonepe/create-order', async (req, res) => {
 
     const safeBookingId = bookingId.toString().replace(/[^a-zA-Z0-9]/g, '');
 
+    // ✅ Add logs here
+    console.log('💰 Booking Amount:', amount);
+    console.log('🆔 Booking ID:', bookingId);
+    console.log('🔐 Safe Booking ID:', safeBookingId);
+
     const request = new StandardCheckoutPayRequest({
       merchantId: PHONEPE_MERCHANT_ID,
       merchantTransactionId: safeBookingId,
@@ -54,6 +59,9 @@ router.post('/phonepe/create-order', async (req, res) => {
       },
     });
 
+    // ✅ Log request payload
+    console.log('📦 PhonePe Payload:', request);
+
     const response = await client.pay(request);
     const redirectUrl = response.instrumentResponse.redirectInfo.url;
 
@@ -62,18 +70,19 @@ router.post('/phonepe/create-order', async (req, res) => {
       orderId: safeBookingId,
       redirectUrl,
     });
-} catch (error) {
-  console.error('PhonePe Create Order Error:', {
-    message: error.message,
-    responseData: error?.response?.data,
-    fullError: error,
-  });
 
-  res.status(500).json({
-    success: false,
-    message: 'Failed to create order',
-    error: error?.response?.data || error.message,
-});
+  } catch (error) {
+    console.error('PhonePe Create Order Error:', {
+      message: error.message,
+      responseData: error?.response?.data,
+      fullError: error,
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create order',
+      error: error?.response?.data || error.message,
+    });
   }
 });
 // 🔁 Status Check Endpoint
