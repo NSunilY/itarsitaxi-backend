@@ -62,11 +62,19 @@ router.post('/phonepe/create-order', async (req, res) => {
       orderId: safeBookingId,
       redirectUrl,
     });
-  } catch (error) {
-    console.error('PhonePe Create Order Error:', error?.response?.data || error.message);
-    res.status(500).json({ success: false, message: 'Failed to create order' });
-  }
-});
+} catch (error) {
+  console.error('PhonePe Create Order Error:', {
+    message: error.message,
+    responseData: error?.response?.data,
+    fullError: error,
+  });
+
+  res.status(500).json({
+    success: false,
+    message: 'Failed to create order',
+    error: error?.response?.data || error.message,
+  });
+}
 
 // 🔁 Status Check Endpoint
 router.get('/phonepe/status/:orderId', async (req, res) => {
