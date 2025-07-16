@@ -3,10 +3,13 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const Booking = require('../models/Booking');
+
 const {
   StandardCheckoutClient,
   Env,
   StandardCheckoutPayRequest,
+  PgCheckoutPaymentInstrument,
+  PgCheckoutPaymentFlow,
 } = require('pg-sdk-node');
 
 const {
@@ -40,37 +43,30 @@ router.post('/phonepe/create-order', async (req, res) => {
     }
 
     const safeBookingId = bookingId.toString().replace(/[^a-zA-Z0-9]/g, '');
+    const amountInPaise = amount * 100;
 
     console.log('💰 Booking Amount:', amount);
     console.log('🆔 Booking ID:', bookingId);
     console.log('🔐 Safe Booking ID:', safeBookingId);
 
-    const amountInPaise = amount * 100;
+    const paymentInstrument = new PgCheckoutPaymentInstrument("PAY_PAGE");
+    const paymentFlow = new PgCheckoutPaymentFlow({
+      redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
+    });
 
-// Fix: Use top-level fields for the payment request
-const request = new StandardCheckoutPayRequest({
-  merchantId: PHONEPE_MERCHANT_ID,
-  merchantTransactionId: safeBookingId,
-  merchantUserId: "user_" + safeBookingId,
-  amount: amountInPaise,
-  redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
-  redirectMode: "REDIRECT",
-  callbackUrl: PHONEPE_CALLBACK_URL,
-  paymentInstrument: {
-    type: "PAY_PAGE"
-  },
-  paymentFlow: {
-    type: "PG_CHECKOUT",
-    merchantUrls: {
-      redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`
-    }
-  }
-});
+    const request = new StandardCheckoutPayRequest(
+      PHONEPE_MERCHANT_ID,
+      safeBookingId,
+      "user_" + safeBookingId,
+      amountInPaise,
+      `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
+      "REDIRECT",
+      PHONEPE_CALLBACK_URL,
+      paymentInstrument,
+      paymentFlow
+    );
 
-    console.log('📦 PhonePe Payload:', request);
-    console.log('✅ Request keys:', Object.keys(request));
-    console.log('✅ Full request:', JSON.stringify(request, null, 2));
-    console.log('📤 Sending request to PhonePe with payload:', JSON.stringify(request, null, 2));
+    console.log('📦 Final Request Payload:', JSON.stringify(request, null, 2));
 
     const response = await client.pay(request);
     const redirectUrl = response.instrumentResponse.redirectInfo.url;
@@ -82,7 +78,7 @@ const request = new StandardCheckoutPayRequest({
     });
 
   } catch (error) {
-    console.error('PhonePe Create Order Error:', {
+    console.error('❌ PhonePe Create Order Error:', {
       message: error.message,
       responseData: error?.response?.data,
       fullError: error,
@@ -104,7 +100,7 @@ router.get('/phonepe/status/:orderId', async (req, res) => {
     const response = await client.getOrderStatus(orderId);
     return res.json({ success: true, status: response.state });
   } catch (err) {
-    console.error('PhonePe status check failed:', err);
+    console.error('❌ PhonePe status check failed:', err);
     return res.status(500).json({ success: false });
   }
 });
@@ -133,7 +129,7 @@ router.post('/payment/phonepe/callback', async (req, res) => {
 
     return res.sendStatus(200);
   } catch (err) {
-    console.error('PhonePe callback error:', err);
+    console.error('❌ PhonePe callback error:', err);
     return res.sendStatus(400);
   }
 });
