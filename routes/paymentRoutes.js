@@ -77,11 +77,11 @@ router.post('/phonepe/callback', async (req, res) => {
   }
 
   try {
-    const newBooking = new Booking({
-      ...bookingData,
-      paymentStatus: 'Paid',
-      transactionId: paymentDetails?.[0]?.transactionId || '',
-    });
+const newBooking = new Booking({
+  ...bookingData,
+  paymentStatus: 'Success', // ✅ FIXED
+  transactionId,
+});
 
     await newBooking.save();
 
