@@ -57,42 +57,54 @@ router.post('/phonepe/initiate', async (req, res) => {
   }
 });
 
-// ✅ Handle PhonePe Callback
+// ✅ Secure callback for PhonePe
 router.post('/phonepe/callback', async (req, res) => {
-  const { merchantOrderId, transactionId, code } = req.body;
-
-  console.log('📩 Callback received:', req.body);
-
-  if (code !== 'PAYMENT_SUCCESS') {
-    return res.redirect('/payment-failed');
-  }
-
-  const bookingData = tempBookingStore[merchantOrderId];
-
-  if (!bookingData) {
-    return res.status(400).send('⚠️ Booking data missing for transaction');
-  }
-
   try {
-    const newBooking = new Booking({
-      ...bookingData,
-      paymentStatus: 'Paid',
-      transactionId,
-    });
+    const authHeader = req.headers.authorization;
+    const bodyStr = JSON.stringify(req.body);
 
-    await newBooking.save();
-
-    const smsText = `Dear ${newBooking.name}, your prepaid booking is confirmed.\nFare: ₹${newBooking.totalFare}.\nThanks for choosing ItarsiTaxi.in!`;
-    await sendSMS(newBooking.mobile, smsText);
-
-    delete tempBookingStore[merchantOrderId];
-
-    res.redirect(
-      `/thank-you?name=${newBooking.name}&carType=${newBooking.carType}&fare=${newBooking.totalFare}`
+    const callback = client.validateCallback(
+      process.env.PHONEPE_CLIENT_ID,
+      process.env.PHONEPE_CLIENT_SECRET,
+      authHeader,
+      bodyStr
     );
+
+    const { orderId, state, transactionId } = callback.payload;
+
+    console.log('📩 Validated callback:', callback.payload);
+
+    const bookingData = tempBookingStore[orderId];
+    if (!bookingData) {
+      console.warn('⚠️ Booking data not found for orderId:', orderId);
+      return res.sendStatus(400);
+    }
+
+    if (state === 'COMPLETED') {
+      const newBooking = new Booking({
+        ...bookingData,
+        paymentStatus: 'Paid',
+        transactionId,
+      });
+
+      await newBooking.save();
+
+      await sendSMS(
+        newBooking.mobile,
+        `Dear ${newBooking.name}, your prepaid booking is confirmed.\nFare: ₹${newBooking.totalFare}.\nThanks for choosing ItarsiTaxi.in!`
+      );
+
+      delete tempBookingStore[orderId];
+
+      return res.redirect(
+        `/thank-you?name=${newBooking.name}&carType=${newBooking.carType}&fare=${newBooking.totalFare}`
+      );
+    } else {
+      return res.redirect('/payment-failed');
+    }
   } catch (err) {
-    console.error('❌ Callback DB Save Error:', err);
-    res.status(500).send('Booking failed.');
+    console.error('❌ PhonePe callback error:', err);
+    return res.redirect('/payment-failed');
   }
 });
 
