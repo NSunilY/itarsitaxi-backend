@@ -1,13 +1,12 @@
 // routes/paymentRoutes.js
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
-const router = express.Router();
 const axios = require('axios');
+const router = express.Router();
 const Booking = require('../models/Booking');
 const {
   StandardCheckoutClient,
   Env,
-  StandardCheckoutPayRequest,
 } = require('pg-sdk-node');
 
 const {
@@ -15,7 +14,9 @@ const {
   PHONEPE_CLIENT_SECRET,
   PHONEPE_CLIENT_VERSION,
   PHONEPE_REDIRECT_URL,
-  PHONEPE_ENV
+  PHONEPE_CALLBACK_URL,
+  PHONEPE_MERCHANT_ID,
+  PHONEPE_ENV,
 } = process.env;
 
 // 🌍 Set environment
@@ -28,6 +29,7 @@ const client = StandardCheckoutClient.getInstance(
   parseInt(PHONEPE_CLIENT_VERSION),
   env
 );
+
 // 🔐 Get OAuth Token
 const getAuthToken = async () => {
   const response = await axios.post(
@@ -50,23 +52,23 @@ router.post('/phonepe/create-order', async (req, res) => {
 
   try {
     const token = await getAuthToken();
+    const orderId = bookingId; // or uuidv4() if you want to separate it
 
-    const orderId = bookingId; // use bookingId as orderId
     const payload = {
       merchantId: PHONEPE_MERCHANT_ID,
       merchantTransactionId: orderId,
-      merchantUserId: bookingId,
+      merchantUserId: 'user_' + bookingId,
       amount: amount * 100, // ₹ to paise
-      redirectUrl: `${PHONEPE_REDIRECT_URL}/${orderId}`,
-      redirectMode: 'REDIRECT',
+      redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${orderId}`,
+      redirectMode: 'POST',
       callbackUrl: PHONEPE_CALLBACK_URL,
       paymentInstrument: {
         type: 'PAY_PAGE',
       },
     };
 
-    const orderResponse = await axios.post(
-      'https://api.phonepe.com/apis/pg/v1/orders',
+    const response = await axios.post(
+      'https://api.phonepe.com/apis/hermes/pg/v1/create',
       payload,
       {
         headers: {
@@ -76,15 +78,16 @@ router.post('/phonepe/create-order', async (req, res) => {
       }
     );
 
-    const { token: orderToken } = orderResponse.data.data;
+    const redirectUrl = response.data.data.instrumentResponse.redirectInfo.url;
 
     res.json({
       success: true,
       orderId,
-      token: orderToken,
+      token: redirectUrl,
     });
+
   } catch (error) {
-    console.error('PhonePe Create Order Error:', error?.response?.data || error);
+    console.error('PhonePe Create Order Error:', error?.response?.data || error.message);
     res.status(500).json({ success: false, message: 'Failed to create order' });
   }
 });
@@ -119,7 +122,9 @@ router.post('/payment/phonepe/callback', async (req, res) => {
 
     await Booking.findOneAndUpdate(
       { bookingId: orderId },
-      { paymentStatus: state === 'COMPLETED' ? 'success' : 'failed' }
+      {
+        paymentStatus: state === 'COMPLETED' ? 'Success' : 'Failed'
+      }
     );
 
     return res.sendStatus(200);
