@@ -1,116 +1,106 @@
+// routes/paymentRoutes.js
 const express = require('express');
-const axios = require('axios');
+const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
-const Booking = require('../models/Booking'); // adjust path if needed
+const Booking = require('../models/Booking');
+const {
+  StandardCheckoutClient,
+  Env,
+  StandardCheckoutPayRequest,
+} = require('pg-sdk-node');
 
 const {
   PHONEPE_CLIENT_ID,
   PHONEPE_CLIENT_SECRET,
-  PHONEPE_MERCHANT_ID,
+  PHONEPE_CLIENT_VERSION,
   PHONEPE_REDIRECT_URL,
-  PHONEPE_CALLBACK_URL,
+  PHONEPE_ENV
 } = process.env;
 
-// 🔐 Get OAuth Token
-const getAuthToken = async () => {
-  const response = await axios.post(
-    'https://api.phonepe.com/apis/identity-manager/v3/merchant/authenticate',
-    {},
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Client-Id': PHONEPE_CLIENT_ID,
-        'X-Client-Secret': PHONEPE_CLIENT_SECRET,
-      },
-    }
-  );
-  return response.data.data.accessToken;
-};
+// 🌍 Set environment
+const env = PHONEPE_ENV === 'PRODUCTION' ? Env.PRODUCTION : Env.SANDBOX;
 
-// 📦 Create Order API
+// 🚀 Create PhonePe SDK client
+const client = StandardCheckoutClient.getInstance(
+  PHONEPE_CLIENT_ID,
+  PHONEPE_CLIENT_SECRET,
+  parseInt(PHONEPE_CLIENT_VERSION),
+  env
+);
+
+// 🔐 Create Payment Order
 router.post('/phonepe/create-order', async (req, res) => {
   const { amount, bookingId } = req.body;
 
   try {
-    const token = await getAuthToken();
+    const orderId = bookingId; // Use bookingId as PhonePe order ID
 
-    const orderId = bookingId; // use bookingId as orderId
-    const payload = {
-      merchantId: PHONEPE_MERCHANT_ID,
-      merchantTransactionId: orderId,
-      merchantUserId: bookingId,
-      amount: amount * 100, // ₹ to paise
-      redirectUrl: `${PHONEPE_REDIRECT_URL}/${orderId}`,
-      redirectMode: 'REDIRECT',
-      callbackUrl: PHONEPE_CALLBACK_URL,
-      paymentInstrument: {
-        type: 'PAY_PAGE',
-      },
-    };
+    // Save initial booking if not already saved (optional safeguard)
+    const booking = await Booking.findOne({ bookingId });
+    if (!booking) {
+      await Booking.create({
+        bookingId,
+        amount,
+        paymentStatus: 'pending'
+      });
+    }
 
-    const orderResponse = await axios.post(
-      'https://api.phonepe.com/apis/pg/v1/orders',
-      payload,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const request = StandardCheckoutPayRequest.builder()
+      .merchantOrderId(orderId)
+      .amount(amount * 100) // Convert to paise
+      .redirectUrl(`${PHONEPE_REDIRECT_URL}?orderId=${orderId}`)
+      .build();
 
-    const { token: orderToken } = orderResponse.data.data;
+    const response = await client.pay(request);
 
-    res.json({
+    return res.json({
       success: true,
       orderId,
-      token: orderToken,
+      redirectUrl: response.redirectUrl
     });
   } catch (error) {
-    console.error('PhonePe Create Order Error:', error?.response?.data || error);
-    res.status(500).json({ success: false, message: 'Failed to create order' });
+    console.error('PhonePe Create Order Error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create order' });
   }
 });
 
-// ✅ Webhook Callback
-router.post('/payment/phonepe/callback', async (req, res) => {
-  const event = req.body?.event;
-
-  const transactionId = req.body?.data?.merchantTransactionId;
-  const status = event === 'checkout.order.completed' ? 'success' : 'failed';
-
-  try {
-    await Booking.findOneAndUpdate(
-      { bookingId: transactionId },
-      { paymentStatus: status }
-    );
-    res.sendStatus(200);
-  } catch (err) {
-    console.error('Webhook error:', err);
-    res.sendStatus(500);
-  }
-});
-
-// 🔄 Fallback Status Check API
+// 🔁 Status Check
 router.get('/phonepe/status/:orderId', async (req, res) => {
-  const orderId = req.params.orderId;
+  const { orderId } = req.params;
 
   try {
-    const token = await getAuthToken();
-    const statusResponse = await axios.get(
-      `https://api.phonepe.com/apis/pg/v1/status/${PHONEPE_MERCHANT_ID}/${orderId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+    const response = await client.getOrderStatus(orderId);
+    return res.json({ success: true, status: response.state });
+  } catch (err) {
+    console.error('PhonePe status check failed:', err);
+    return res.status(500).json({ success: false });
+  }
+});
+
+// 📩 Webhook (Callback)
+router.post('/payment/phonepe/callback', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const bodyStr = JSON.stringify(req.body);
+
+    const callback = client.validateCallback(
+      PHONEPE_CLIENT_ID,
+      PHONEPE_CLIENT_SECRET,
+      authHeader,
+      bodyStr
     );
 
-    const status = statusResponse.data.data?.state || 'UNKNOWN';
-    res.json({ success: true, status });
+    const { orderId, state } = callback.payload;
+
+    await Booking.findOneAndUpdate(
+      { bookingId: orderId },
+      { paymentStatus: state === 'COMPLETED' ? 'success' : 'failed' }
+    );
+
+    return res.sendStatus(200);
   } catch (err) {
-    console.error('Status check failed:', err?.response?.data || err);
-    res.status(500).json({ success: false });
+    console.error('PhonePe callback error:', err);
+    return res.sendStatus(400);
   }
 });
 
