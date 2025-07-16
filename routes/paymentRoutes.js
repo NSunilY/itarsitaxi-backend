@@ -63,47 +63,40 @@ router.get('/phonepe/callback', (req, res) => {
 });
 
 // ✅ WEBHOOK HANDLER — from PhonePe servers
-router.post('/phonepe/webhook', async (req, res) => {
+router.post('/phonepe/callback', async (req, res) => {
+  const { transactionId, merchantOrderId, code } = req.body;
+
+  console.log('📩 PhonePe callback received:', req.body);
+
+  if (code !== 'PAYMENT_SUCCESS') {
+    return res.redirect('/payment-failed');
+  }
+
+  const bookingData = tempBookingStore[merchantOrderId];
+  if (!bookingData) {
+    return res.status(400).send('⚠️ No booking data found for this transaction');
+  }
+
   try {
-    const authHeader = req.headers.authorization;
-    const bodyStr = JSON.stringify(req.body);
+    const newBooking = new Booking({
+      ...bookingData,
+      paymentStatus: 'Paid',
+      transactionId,
+    });
 
-    const callback = client.validateCallback(
-      process.env.PHONEPE_CLIENT_ID,
-      process.env.PHONEPE_CLIENT_SECRET,
-      authHeader,
-      bodyStr
+    await newBooking.save();
+
+    const smsText = `Dear ${newBooking.name}, your prepaid booking is confirmed.\nFare: ₹${newBooking.totalFare}.\nThanks for choosing ItarsiTaxi.in!`;
+    await sendSMS(newBooking.mobile, smsText);
+
+    delete tempBookingStore[merchantOrderId];
+
+    res.redirect(
+      `/thank-you?name=${newBooking.name}&carType=${newBooking.carType}&fare=${newBooking.totalFare}`
     );
-
-    const { orderId, state, transactionId } = callback.payload;
-
-    const bookingData = tempBookingStore[orderId];
-    if (!bookingData) {
-      console.warn('⚠️ Booking data not found for orderId:', orderId);
-      return res.sendStatus(400);
-    }
-
-    if (state === 'COMPLETED') {
-      const newBooking = new Booking({
-        ...bookingData,
-        paymentStatus: 'Paid',
-        transactionId,
-      });
-
-      await newBooking.save();
-
-      await sendSMS(
-        newBooking.mobile,
-        `Dear ${newBooking.name}, your prepaid booking is confirmed.\nFare: ₹${newBooking.totalFare}.\nThanks for choosing ItarsiTaxi.in!`
-      );
-
-      delete tempBookingStore[orderId];
-    }
-
-    return res.sendStatus(200);
   } catch (err) {
-    console.error('❌ Webhook callback error:', err);
-    return res.sendStatus(400);
+    console.error('❌ DB Save Error:', err);
+    res.status(500).send('Booking failed. Please contact support.');
   }
 });
 module.exports = router;
