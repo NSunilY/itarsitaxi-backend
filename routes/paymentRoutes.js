@@ -49,7 +49,7 @@ router.post('/phonepe/create-order', async (req, res) => {
       merchantId: PHONEPE_MERCHANT_ID,
       merchantTransactionId: safeBookingId,
       merchantUserId: 'user_' + safeBookingId,
-      amount: amount * 100, // ✅ this must be top-level
+      amount: amount * 100, // ✅ THIS FIXES THE ISSUE
       redirectUrl: `${PHONEPE_REDIRECT_URL}?orderId=${safeBookingId}`,
       redirectMode: 'REDIRECT',
       callbackUrl: PHONEPE_CALLBACK_URL,
@@ -66,7 +66,7 @@ router.post('/phonepe/create-order', async (req, res) => {
     res.json({
       success: true,
       orderId: safeBookingId,
-      token: redirectUrl,
+      token: redirectUrl, // ✅ PhonePe calls this the redirect URL
     });
 
   } catch (error) {
