@@ -27,6 +27,21 @@ const client = StandardCheckoutClient.getInstance(
   parseInt(PHONEPE_CLIENT_VERSION),
   env
 );
+// 🔐 Get OAuth Token
+const getAuthToken = async () => {
+  const response = await axios.post(
+    'https://api.phonepe.com/apis/identity-manager/v3/merchant/authenticate',
+    {},
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-Id': PHONEPE_CLIENT_ID,
+        'X-Client-Secret': PHONEPE_CLIENT_SECRET,
+      },
+    }
+  );
+  return response.data.data.accessToken;
+};
 
 // 🔐 Create Payment Order
 router.post('/phonepe/create-order', async (req, res) => {
