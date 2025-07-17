@@ -81,11 +81,12 @@ router.post('/phonepe/callback', async (req, res) => {
   }
 
   try {
-    const newBooking = new Booking({
-      ...bookingData,
-      paymentStatus: 'Success',
-      transactionId,
-    });
+const newBooking = new Booking({
+  ...bookingData,
+  paymentStatus: 'Success',
+  transactionId,
+  merchantOrderId, // ✅ add this line
+});
 
     await newBooking.save();
 
@@ -100,6 +101,24 @@ router.post('/phonepe/callback', async (req, res) => {
   } catch (err) {
     console.error('❌ DB Save Error:', err);
     res.status(500).send('Booking failed. Please contact support.');
+  }
+});
+// ✅ CHECK PAYMENT STATUS (used by frontend /payment-status page)
+router.get('/phonepe/status/:merchantOrderId', async (req, res) => {
+  const merchantOrderId = req.params.merchantOrderId;
+
+  try {
+    // Look for booking using the merchantOrderId (you must save it)
+    const booking = await Booking.findOne({ merchantOrderId });
+
+    if (booking && booking.paymentStatus === 'Success') {
+      return res.json({ success: true, status: 'COMPLETED' });
+    } else {
+      return res.json({ success: false, status: 'NOT_FOUND' });
+    }
+  } catch (err) {
+    console.error('❌ Error checking payment status:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 

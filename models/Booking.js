@@ -28,7 +28,7 @@ paymentStatus: {
   default: 'Pending',
 },
   transactionId: { type: String, default: '' },
-
+merchantOrderId: { type: String, default: '' },
   status: {
     type: String,
     enum: ['pending', 'confirmed', 'cancelled'],
