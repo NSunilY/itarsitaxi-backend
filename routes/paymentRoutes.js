@@ -108,11 +108,10 @@ router.get('/phonepe/status/:merchantOrderId', async (req, res) => {
   const merchantOrderId = req.params.merchantOrderId;
 
   try {
-    // Look for booking using the merchantOrderId (you must save it)
     const booking = await Booking.findOne({ merchantOrderId });
 
     if (booking && booking.paymentStatus === 'Success') {
-      return res.json({ success: true, status: 'COMPLETED' });
+      return res.json({ success: true, status: 'COMPLETED', booking }); // ✅ this line changed
     } else {
       return res.json({ success: false, status: 'NOT_FOUND' });
     }
@@ -121,6 +120,5 @@ router.get('/phonepe/status/:merchantOrderId', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
-
 module.exports = router;
 
