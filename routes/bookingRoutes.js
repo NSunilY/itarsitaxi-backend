@@ -54,6 +54,14 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
+    // ❌ Only allow saving here for 'Cash on Arrival'
+    if (paymentMode !== "Cash on Arrival") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid route for prepaid bookings",
+      });
+    }
+
     const newBooking = new Booking({
       name,
       mobile,
@@ -67,23 +75,21 @@ router.post("/", async (req, res) => {
       pickupTime,
       tripType,
       duration,
+      paymentStatus: "Pending",
     });
 
     const savedBooking = await newBooking.save();
     console.log("✅ Booking saved to MongoDB:", savedBooking);
 
-    // ✅ Sanitize all variables used in SMS
+    // ✅ SMS logic
     const nameText = sanitizeSMS(safe(name));
     const carText = sanitizeSMS(safe(carType));
     const fareText = sanitizeSMS(safe(totalFare));
     const pickupText = sanitizeSMS(`${safe(pickupDate)} ${safe(pickupTime)}`);
     const dropText = sanitizeSMS(safe(dropLocation));
     const mobileText = sanitizeSMS(safe(mobile));
-
-    // ✅ Construct clean English SMS messages
     const customerMessage = `Hi ${nameText}, your ItarsiTaxi booking is confirmed. Car: ${carText}, Fare: Rs${fareText}, Pickup: ${pickupText}. Thank you!`;
     const adminMessage = `New booking by ${nameText} (${mobileText}). Pickup: ${pickupText}, Drop: ${dropText}, Car: ${carText}, Fare: Rs${fareText}`;
-
     const adminPhone = process.env.ADMIN_PHONE || "91XXXXXXXXXX";
 
     await sendSMS(mobileText, customerMessage);
