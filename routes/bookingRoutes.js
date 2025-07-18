@@ -34,31 +34,43 @@ router.get("/distance", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    console.log("📥 Incoming booking request:", req.body);
+    console.log("📥 Incoming booking request body:\n", JSON.stringify(req.body, null, 2));
 
     const {
       name,
       mobile,
-      email,
+      email = "",
       paymentMode,
       carType,
       distance,
       totalFare,
-      tollCount,
+      tollCount = 0,
       pickupDate,
       pickupTime,
       tripType,
       pickupLocation,
       dropLocation,
-      duration,
+      duration = "",
     } = req.body;
 
     // Mandatory field check
-    if (
-      !name || !mobile || !paymentMode || !carType || !distance ||
-      !totalFare || !tripType || !pickupLocation || !dropLocation
-    ) {
-      return res.status(400).json({ success: false, message: "Missing required fields" });
+    const missingFields = [];
+    if (!name) missingFields.push("name");
+    if (!mobile) missingFields.push("mobile");
+    if (!paymentMode) missingFields.push("paymentMode");
+    if (!carType) missingFields.push("carType");
+    if (!distance) missingFields.push("distance");
+    if (!totalFare) missingFields.push("totalFare");
+    if (!tripType) missingFields.push("tripType");
+    if (!pickupLocation) missingFields.push("pickupLocation");
+    if (!dropLocation) missingFields.push("dropLocation");
+
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+        missingFields,
+      });
     }
 
     if (paymentMode !== "Cash on Arrival") {
@@ -68,7 +80,6 @@ router.post("/", async (req, res) => {
     const { distanceInKm: pickupDistanceFromItarsi } = await getDistance(ITARSI_LOCATION, pickupLocation);
     const { distanceInKm: dropDistanceFromItarsi } = await getDistance(ITARSI_LOCATION, dropLocation);
 
-    // Local Trip: both pickup and drop must be within 15 KM of Itarsi
     if (tripType === "Local") {
       if (pickupDistanceFromItarsi > 15 || dropDistanceFromItarsi > 15) {
         return res.status(400).json({
@@ -78,7 +89,6 @@ router.post("/", async (req, res) => {
       }
     }
 
-    // One Way or Round Trip: drop must be at least 15 KM from Itarsi
     if (["One Way", "Round Trip"].includes(tripType)) {
       if (dropDistanceFromItarsi < 15) {
         return res.status(400).json({
@@ -88,7 +98,6 @@ router.post("/", async (req, res) => {
       }
     }
 
-    // Airport trip: drop location must mention "airport"
     if (tripType === "Airport" && !dropLocation.toLowerCase().includes("airport")) {
       return res.status(400).json({
         success: false,
@@ -140,7 +149,7 @@ router.post("/", async (req, res) => {
     });
   } catch (err) {
     console.error("🔥 Booking Error:", err.message || err);
-    res.status(500).json({ success: false, message: "Booking failed" });
+    res.status(500).json({ success: false, message: "Booking failed", error: err.message });
   }
 });
 
