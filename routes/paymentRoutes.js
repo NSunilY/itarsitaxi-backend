@@ -57,7 +57,7 @@ router.post('/phonepe/initiate', async (req, res) => {
   console.error('📛 Full stack trace:', err?.stack);
   res.status(500).json({ success: false, message: 'Payment initiation failed' });
 }
-
+});
 // ✅ USER REDIRECT HANDLER
 router.get('/phonepe/callback', (req, res) => {
   const merchantOrderId = req.query.merchantOrderId;
