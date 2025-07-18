@@ -4,14 +4,15 @@ const getDistance = require("../utils/getDistance");
 const Booking = require("../models/Booking");
 const sendSMS = require("../utils/sendSMS");
 
+const ITARSI_LOCATION = "Itarsi, Madhya Pradesh";
+
 const safe = (v, fallback = "Not Provided") => (v || "").toString().trim() || fallback;
 
-// ✅ Sanitize all SMS content to remove Unicode characters
 const sanitizeSMS = (text) => {
   return (text || "")
-    .replace(/[–—]/g, "-")           // Replace en dash/em dash with hyphen
-    .replace(/[₹•“”‘’]/g, "")        // Remove special symbols/quotes
-    .replace(/[^\x00-\x7F]/g, "")    // Remove non-ASCII characters
+    .replace(/[–—]/g, "-")
+    .replace(/[₹•“”‘’]/g, "")
+    .replace(/[^\x00-\x7F]/g, "")
     .trim();
 };
 
@@ -42,24 +43,62 @@ router.post("/", async (req, res) => {
       carType,
       distance,
       totalFare,
-      dropLocation,
+      tollCount,
       pickupDate,
       pickupTime,
       tripType,
+      pickupLocation,
+      dropLocation,
       duration,
     } = req.body;
 
-    if (!name || !mobile || !paymentMode || !carType || !distance || !totalFare) {
-      console.warn("⚠️ Missing required fields");
+    // 🔒 Mandatory field check
+    if (
+      !name ||
+      !mobile ||
+      !paymentMode ||
+      !carType ||
+      !distance ||
+      !totalFare ||
+      !tripType ||
+      !pickupLocation ||
+      !dropLocation
+    ) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
-    // ❌ Only allow saving here for 'Cash on Arrival'
     if (paymentMode !== "Cash on Arrival") {
       return res.status(400).json({
         success: false,
         message: "Invalid route for prepaid bookings",
       });
+    }
+
+    // 🎯 Trip Type Validation
+    const { distanceInKm: pickupDistanceFromItarsi } = await getDistance(ITARSI_LOCATION, pickupLocation);
+    const { distanceInKm: dropDistanceFromItarsi } = await getDistance(ITARSI_LOCATION, dropLocation);
+
+    if (tripType === "Local") {
+      if (pickupDistanceFromItarsi > 15 || dropDistanceFromItarsi > 15) {
+        return res.status(400).json({
+          success: false,
+          message: "For Local trips, both pickup and drop must be within 15 KM of Itarsi.",
+        });
+      }
+    } else {
+      if (distance < 15) {
+        return res.status(400).json({
+          success: false,
+          message: "Minimum distance for this trip type must be at least 15 KM.",
+        });
+      }
+
+      if (tripType === "Airport" && !dropLocation.toLowerCase().includes("airport")) {
+        return res.status(400).json({
+          success: false,
+          message: "Drop location must be a valid airport for Airport trip type.",
+        });
+      }
     }
 
     const newBooking = new Booking({
@@ -70,10 +109,12 @@ router.post("/", async (req, res) => {
       carType,
       distance,
       totalFare,
-      dropLocation,
+      tollCount,
       pickupDate,
       pickupTime,
       tripType,
+      pickupLocation,
+      dropLocation,
       duration,
       paymentStatus: "Pending",
     });
@@ -81,15 +122,17 @@ router.post("/", async (req, res) => {
     const savedBooking = await newBooking.save();
     console.log("✅ Booking saved to MongoDB:", savedBooking);
 
-    // ✅ SMS logic
+    // ✉️ SMS Logic
     const nameText = sanitizeSMS(safe(name));
     const carText = sanitizeSMS(safe(carType));
     const fareText = sanitizeSMS(safe(totalFare));
     const pickupText = sanitizeSMS(`${safe(pickupDate)} ${safe(pickupTime)}`);
+    const pickupLocText = sanitizeSMS(safe(pickupLocation));
     const dropText = sanitizeSMS(safe(dropLocation));
     const mobileText = sanitizeSMS(safe(mobile));
-    const customerMessage = `Hi ${nameText}, your ItarsiTaxi booking is confirmed. Car: ${carText}, Fare: Rs${fareText}, Pickup: ${pickupText}. Thank you!`;
-    const adminMessage = `New booking by ${nameText} (${mobileText}). Pickup: ${pickupText}, Drop: ${dropText}, Car: ${carText}, Fare: Rs${fareText}`;
+    
+    const customerMessage = `Hi ${nameText}, your ItarsiTaxi booking is confirmed. Car: ${carText}, Fare: Rs${fareText}, Pickup: ${pickupText} from ${pickupLocText}. Thank you!`;
+    const adminMessage = `New booking by ${nameText} (${mobileText}). Pickup: ${pickupLocText} ${pickupText}, Drop: ${dropText}, Car: ${carText}, Fare: Rs${fareText}`;
     const adminPhone = process.env.ADMIN_PHONE || "91XXXXXXXXXX";
 
     await sendSMS(mobileText, customerMessage);
