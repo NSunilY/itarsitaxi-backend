@@ -1,14 +1,15 @@
+// routes/distance.js
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 require('dotenv').config(); // ✅ Load environment variables
 
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
 router.post('/', async (req, res) => {
   const { origin, destination } = req.body;
 
-  if (!GOOGLE_API_KEY) {
+  if (!apiKey) {
     return res.status(500).json({ error: '❌ Missing Google API Key in environment' });
   }
 
@@ -17,12 +18,7 @@ router.post('/', async (req, res) => {
   }
 
   try {
-require('dotenv').config();
-const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&key=${apiKey}`;
-      origin
-    )}&destination=${encodeURIComponent(destination)}&key=${GOOGLE_API_KEY}`;
-
+    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&key=${apiKey}`;
     const response = await axios.get(url);
 
     const route = response.data.routes[0];
@@ -36,7 +32,7 @@ const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origi
     const durationText = leg.duration.text;
 
     // Toll count (approx): count "TOLL" steps from HTML instructions
-    const tolls = route.legs[0].steps.filter((step) =>
+    const tolls = leg.steps.filter((step) =>
       /toll/i.test(step.html_instructions)
     ).length;
 
