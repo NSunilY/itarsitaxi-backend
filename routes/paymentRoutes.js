@@ -51,11 +51,12 @@ router.post('/phonepe/initiate', async (req, res) => {
       success: true,
       redirectUrl: response.redirectUrl,
     });
-  } catch (err) {
-    console.error('❌ PhonePe SDK Error:', err);
-    res.status(500).json({ success: false, message: 'Payment initiation failed' });
-  }
-});
+} catch (err) {
+  console.error('❌ PhonePe SDK Error:', err);
+  console.error('📛 Raw error message:', err?.message);
+  console.error('📛 Full stack trace:', err?.stack);
+  res.status(500).json({ success: false, message: 'Payment initiation failed' });
+}
 
 // ✅ USER REDIRECT HANDLER
 router.get('/phonepe/callback', (req, res) => {
