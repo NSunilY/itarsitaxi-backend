@@ -17,7 +17,9 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(
+require('dotenv').config();
+const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&key=${apiKey}`;
       origin
     )}&destination=${encodeURIComponent(destination)}&key=${GOOGLE_API_KEY}`;
 
