@@ -26,7 +26,7 @@ router.get("/distance", async (req, res) => {
     const result = await getDistance(origin, destination);
     res.json(result);
   } catch (err) {
-    console.error("❌ Error in distance API:", err.message);
+    console.error("❌ Error in distance API:", err);
     res.status(500).json({ error: "Failed to fetch distance." });
   }
 });
@@ -54,15 +54,8 @@ router.post("/", async (req, res) => {
 
     // 🔒 Mandatory field check
     if (
-      !name ||
-      !mobile ||
-      !paymentMode ||
-      !carType ||
-      !distance ||
-      !totalFare ||
-      !tripType ||
-      !pickupLocation ||
-      !dropLocation
+      !name || !mobile || !paymentMode || !carType || !distance ||
+      !totalFare || !tripType || !pickupLocation || !dropLocation
     ) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
@@ -74,10 +67,22 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // 🎯 Trip Type Validation
-    const { distanceInKm: pickupDistanceFromItarsi } = await getDistance(ITARSI_LOCATION, pickupLocation);
-    const { distanceInKm: dropDistanceFromItarsi } = await getDistance(ITARSI_LOCATION, dropLocation);
+    // 🧠 Get distances from Itarsi
+    const pickupResult = await getDistance(ITARSI_LOCATION, pickupLocation);
+    const dropResult = await getDistance(ITARSI_LOCATION, dropLocation);
 
+    if (!pickupResult || !dropResult) {
+      console.error("❌ Distance API failed for pickup or drop location.");
+      return res.status(500).json({
+        success: false,
+        message: "Could not validate pickup/drop location. Please try again.",
+      });
+    }
+
+    const pickupDistanceFromItarsi = pickupResult.distanceInKm;
+    const dropDistanceFromItarsi = dropResult.distanceInKm;
+
+    // 🎯 Trip Type Validations
     if (tripType === "Local") {
       if (pickupDistanceFromItarsi > 15 || dropDistanceFromItarsi > 15) {
         return res.status(400).json({
@@ -93,6 +98,16 @@ router.post("/", async (req, res) => {
         });
       }
 
+      if (
+        (tripType === "One Way" || tripType === "Round Trip") &&
+        dropDistanceFromItarsi < 15
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Drop location must be at least 15 KM from Itarsi for this trip type.",
+        });
+      }
+
       if (tripType === "Airport" && !dropLocation.toLowerCase().includes("airport")) {
         return res.status(400).json({
           success: false,
@@ -101,6 +116,7 @@ router.post("/", async (req, res) => {
       }
     }
 
+    // ✅ Save booking
     const newBooking = new Booking({
       name,
       mobile,
@@ -122,7 +138,7 @@ router.post("/", async (req, res) => {
     const savedBooking = await newBooking.save();
     console.log("✅ Booking saved to MongoDB:", savedBooking);
 
-    // ✉️ SMS Logic
+    // 📩 Send SMS
     const nameText = sanitizeSMS(safe(name));
     const carText = sanitizeSMS(safe(carType));
     const fareText = sanitizeSMS(safe(totalFare));
@@ -130,7 +146,7 @@ router.post("/", async (req, res) => {
     const pickupLocText = sanitizeSMS(safe(pickupLocation));
     const dropText = sanitizeSMS(safe(dropLocation));
     const mobileText = sanitizeSMS(safe(mobile));
-    
+
     const customerMessage = `Hi ${nameText}, your ItarsiTaxi booking is confirmed. Car: ${carText}, Fare: Rs${fareText}, Pickup: ${pickupText} from ${pickupLocText}. Thank you!`;
     const adminMessage = `New booking by ${nameText} (${mobileText}). Pickup: ${pickupLocText} ${pickupText}, Drop: ${dropText}, Car: ${carText}, Fare: Rs${fareText}`;
     const adminPhone = process.env.ADMIN_PHONE || "91XXXXXXXXXX";
@@ -144,7 +160,7 @@ router.post("/", async (req, res) => {
       bookingId: savedBooking._id,
     });
   } catch (err) {
-    console.error("🔥 Booking Error:", err.message || err);
+    console.error("🔥 Booking Error:", err);
     res.status(500).json({ success: false, message: "Booking failed" });
   }
 });
