@@ -54,16 +54,16 @@ router.post("/", async (req, res) => {
     } = req.body;
 
     // Mandatory field check
-    const missingFields = [];
-    if (!name) missingFields.push("name");
-    if (!mobile) missingFields.push("mobile");
-    if (!paymentMode) missingFields.push("paymentMode");
-    if (!carType) missingFields.push("carType");
-    if (!distance) missingFields.push("distance");
-    if (!totalFare) missingFields.push("totalFare");
-    if (!tripType) missingFields.push("tripType");
-    if (!pickupLocation) missingFields.push("pickupLocation");
-    if (!dropLocation) missingFields.push("dropLocation");
+const missingFields = [];
+if (!name) missingFields.push("name");
+if (!mobile) missingFields.push("mobile");
+if (!paymentMode) missingFields.push("paymentMode");
+if (!carType) missingFields.push("carType");
+if (distance === undefined || distance === null) missingFields.push("distance");
+if (totalFare === undefined || totalFare === null) missingFields.push("totalFare");
+if (!tripType) missingFields.push("tripType");
+if (!pickupLocation) missingFields.push("pickupLocation");
+if (!dropLocation) missingFields.push("dropLocation");
 
     if (missingFields.length > 0) {
       return res.status(400).json({
