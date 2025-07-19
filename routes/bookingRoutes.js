@@ -132,8 +132,8 @@ const fareText = sanitizeSMS(safe(totalFare));
 const pickupText = sanitizeSMS(`${safe(pickupDate)} ${safe(pickupTime)}`);
 const mobileText = sanitizeSMS(safe(mobile));
 
-const customerMessage = `Booking confirmed with ItarsiTaxi on ${pickupText}. Fare: ₹${fareText}. Thank you!`;
-const adminMessage = `Booking received: ${nameText} (${mobileText}), ${pickupText}`;
+const customerMessage = `Booking confirmed with ItarsiTaxi on pickup date ${pickupText}. Fare: Rs${fareText}. Thank you!`;
+const adminMessage = `Booking received: ${nameText} (${mobileText}),pickup date  ${pickupText}`;
 
 const adminPhone = process.env.ADMIN_PHONE || "91XXXXXXXXXX";
 
