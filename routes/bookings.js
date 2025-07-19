@@ -4,7 +4,7 @@ const Booking = require('../models/Booking'); // adjust path based on your struc
 const sendSMS = require('../utils/sendSMS');
 
 // Replace with your admin number
-const ADMIN_MOBILE = '7000771918';
+const ADMIN_MOBILE = process.env.ADMIN_PHONE;
 
 router.post('/', async (req, res) => {
   const {
