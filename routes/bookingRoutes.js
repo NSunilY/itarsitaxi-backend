@@ -126,21 +126,19 @@ if (!dropLocation) missingFields.push("dropLocation");
     const savedBooking = await newBooking.save();
     console.log("✅ Booking saved to MongoDB:", savedBooking);
 
-    // SMS logic
-    const nameText = sanitizeSMS(safe(name));
-    const carText = sanitizeSMS(safe(carType));
-    const fareText = sanitizeSMS(safe(totalFare));
-    const pickupText = sanitizeSMS(`${safe(pickupDate)} ${safe(pickupTime)}`);
-    const pickupLocText = sanitizeSMS(safe(pickupLocation));
-    const dropText = sanitizeSMS(safe(dropLocation));
-    const mobileText = sanitizeSMS(safe(mobile));
+// SMS logic
+const nameText = sanitizeSMS(safe(name));
+const fareText = sanitizeSMS(safe(totalFare));
+const pickupText = sanitizeSMS(`${safe(pickupDate)} ${safe(pickupTime)}`);
+const mobileText = sanitizeSMS(safe(mobile));
 
-    const customerMessage = `Hi ${nameText}, your ItarsiTaxi booking is confirmed. Car: ${carText}, Fare: Rs${fareText}, Pickup: ${pickupText} from ${pickupLocText}. Thank you!`;
-    const adminMessage = `New booking by ${nameText} (${mobileText}). Pickup: ${pickupLocText} ${pickupText}, Drop: ${dropText}, Car: ${carText}, Fare: Rs${fareText}`;
-    const adminPhone = process.env.ADMIN_PHONE || "91XXXXXXXXXX";
+const customerMessage = `Booking confirmed with ItarsiTaxi on ${pickupText}. Fare: ₹${fareText}. Thank you!`;
+const adminMessage = `Booking received: ${nameText} (${mobileText}), ${pickupText}`;
 
-    await sendSMS(mobileText, customerMessage);
-    await sendSMS(adminPhone, adminMessage);
+const adminPhone = process.env.ADMIN_PHONE || "91XXXXXXXXXX";
+
+await sendSMS(mobileText, customerMessage);
+await sendSMS(adminPhone, adminMessage);
 
     res.status(201).json({
       success: true,
