@@ -20,17 +20,10 @@ router.post('/', async (req, res) => {
     const booking = new Booking(req.body);
     await booking.save();
 
-// Trim pickup, drop, and car type
-const pickupShort = (req.body.pickupLocation || '').split(',')[0].trim();
-const dropShort = (req.body.dropLocation || '').split(',')[0].trim();
-const carTypeShort = (carType || '').split(/[–-]/)[0].trim(); // handles en dash or hyphen
-const pickupDate = req.body.pickupDate;
-const pickupTime = req.body.pickupTime;
-
 // Short and informative messages
-const messageToCustomer = `Booking confirmed: ${pickupShort} to ${dropShort}, ${pickupDate} ${pickupTime}. Car: ${carTypeShort}, Fare: ₹${totalFare}. ItarsiTaxi.in`;
+const messageToCustomer = `Booking confirmed with ItarsiTaxi on ${pickupDate} at ${pickupTime}. Fare: ₹${totalFare}. Thank you!`;
 
-const messageToAdmin = `New booking by ${name} (${mobile}): ${pickupShort} to ${dropShort} on ${pickupDate} ${pickupTime}, ${carTypeShort}, ₹${totalFare}`;
+const messageToAdmin = `Booking received: ${name} (${mobile}), ${pickupDate} at ${pickupTime}`;
 
     // Send SMS to both customer and admin
 await sendSMS(mobile, messageToCustomer);
