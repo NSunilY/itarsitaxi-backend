@@ -7,12 +7,12 @@ const bookingSchema = new mongoose.Schema({
   email: { type: String, default: '' },
   gstNumber: { type: String, default: '' },
 
-  carType: { type: String }, // Removed required
-  distance: { type: Number }, // Removed required
+  carType: { type: String },
+  distance: { type: Number },
   duration: { type: String, default: '' },
 
   tollCount: { type: Number, default: 0 },
-  totalFare: { type: Number }, // Removed required
+  totalFare: { type: Number },
   advanceAmount: { type: Number, default: 0 },
 
   pickupLocation: { type: String, default: '' },
@@ -21,10 +21,10 @@ const bookingSchema = new mongoose.Schema({
   pickupTime: { type: String, default: '' },
   tripType: { type: String, default: '' },
 
-  paymentMode: { type: String }, // Removed required
+  paymentMode: { type: String },
   paymentStatus: {
     type: String,
-    enum: ['Pending', 'Success', 'Failed'],
+    enum: ['Pending', 'Success', 'Failed', 'Paid'], // ✅ Added 'Paid'
     default: 'Pending',
   },
   transactionId: { type: String, default: '' },
