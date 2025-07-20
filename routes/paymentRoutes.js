@@ -16,7 +16,7 @@ router.post('/razorpay/create-order', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invalid request' });
   }
 
-  const receiptId = `receipt_${uuidv4()}`;
+const receiptId = `rzp_${Math.random().toString(36).substring(2, 12)}`;
 
   const options = {
     amount: amount * 100, // amount in paise
