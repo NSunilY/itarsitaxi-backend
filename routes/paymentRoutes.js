@@ -1,125 +1,80 @@
-// routes/paymentRoutes.js
+// routes/paymentRoutes.js (Razorpay version)
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
+const razorpay = require('../utils/razorpay');
 const Booking = require('../models/Booking');
 const sendSMS = require('../utils/sendSMS');
 require('dotenv').config();
 
-const {
-  StandardCheckoutClient,
-  StandardCheckoutPayRequest,
-  Env,
-} = require('pg-sdk-node');
-
-// Initialize PhonePe SDK Client
-const client = StandardCheckoutClient.getInstance(
-  process.env.PHONEPE_CLIENT_ID,
-  process.env.PHONEPE_CLIENT_SECRET,
-  parseInt(process.env.PHONEPE_CLIENT_VERSION),
-  process.env.PHONEPE_ENV === 'PRODUCTION' ? Env.PRODUCTION : Env.SANDBOX
-);
-
-const tempBookingStore = {};
-
-// ✅ Initiate Payment
-router.post('/phonepe/initiate', async (req, res) => {
+// ✅ CREATE RAZORPAY ORDER
+router.post('/razorpay/create-order', async (req, res) => {
   const { amount, bookingData } = req.body;
+
   if (!amount || !bookingData) {
     return res.status(400).json({ success: false, message: 'Invalid request' });
   }
 
-  const merchantOrderId = uuidv4();
+  const receiptId = `receipt_${uuidv4()}`;
+
+  const options = {
+    amount: amount * 100, // amount in paise
+    currency: 'INR',
+    receipt: receiptId,
+  };
 
   try {
-    const redirectUrlWithOrder = `${process.env.PHONEPE_REDIRECT_URL}?merchantOrderId=${merchantOrderId}`;
+    const order = await razorpay.orders.create(options);
+    console.log('✅ Razorpay order created:', order.id);
 
-    const request = StandardCheckoutPayRequest.builder()
-      .merchantOrderId(merchantOrderId)
-      .amount(amount * 100)
-      .redirectUrl(redirectUrlWithOrder)
-      .build({
-        callbackUrl: process.env.PHONEPE_CALLBACK_URL,
-      });
+    res.json({ success: true, order, bookingData });
+  } catch (err) {
+    console.error('❌ Razorpay Order Error:', err);
+    res.status(500).json({ success: false, message: 'Failed to create Razorpay order' });
+  }
+});
 
-    const response = await client.pay(request);
+// ✅ VERIFY PAYMENT & SAVE BOOKING
+router.post('/razorpay/verify', async (req, res) => {
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, bookingData } = req.body;
 
-    // Temporarily store booking data
-    tempBookingStore[merchantOrderId] = bookingData;
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !bookingData) {
+    return res.status(400).json({ success: false, message: 'Incomplete payment verification data' });
+  }
 
-    res.json({
-      success: true,
-      redirectUrl: response.redirectUrl,
+  const expectedSignature = crypto
+    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+    .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+    .digest('hex');
+
+  if (expectedSignature !== razorpay_signature) {
+    console.warn('⚠️ Invalid signature, possible tampering');
+    return res.status(400).json({ success: false, message: 'Invalid payment signature' });
+  }
+
+  try {
+    const newBooking = new Booking({
+      ...bookingData,
+      paymentStatus: 'Paid',
+      transactionId: razorpay_payment_id,
+      merchantOrderId: razorpay_order_id,
+      advanceAmount: bookingData.advanceAmount || 0,
     });
-} catch (err) {
-  console.error('❌ PhonePe SDK Error:', err);
-  console.error('📛 Raw error message:', err?.message);
-  console.error('📛 Full stack trace:', err?.stack);
-  res.status(500).json({ success: false, message: 'Payment initiation failed' });
-}
-});
-// ✅ USER REDIRECT HANDLER
-router.get('/phonepe/callback', (req, res) => {
-  const merchantOrderId = req.query.merchantOrderId;
-  return res.redirect(`/payment-status?merchantOrderId=${merchantOrderId}`);
-});
-
-// ✅ WEBHOOK HANDLER
-router.post('/phonepe/callback', async (req, res) => {
-  console.log('📩 PhonePe callback received:', req.body);
-
-  const { payload } = req.body;
-  const merchantOrderId = payload.merchantOrderId;
-  const transactionId = payload.paymentDetails?.[0]?.transactionId || '';
-
-  if (payload.state !== 'COMPLETED') {
-    return res.redirect('/payment-failed');
-  }
-
-  const bookingData = tempBookingStore[merchantOrderId];
-  if (!bookingData) {
-    return res.status(400).send('⚠️ No booking data found for this transaction');
-  }
-
-  try {
-const newBooking = new Booking({
-  ...bookingData,
-  paymentStatus: 'Success',
-  transactionId,
-  merchantOrderId, // ✅ add this line
-});
 
     await newBooking.save();
 
     const smsText = `Dear ${newBooking.name}, your prepaid booking is confirmed.\nFare: ₹${newBooking.totalFare}.\nThanks for choosing ItarsiTaxi.in!`;
     await sendSMS(newBooking.mobile, smsText);
 
-    delete tempBookingStore[merchantOrderId];
+    console.log('✅ Booking saved and SMS sent:', newBooking._id);
 
-    res.redirect(
-      `/thank-you?name=${newBooking.name}&carType=${newBooking.carType}&fare=${newBooking.totalFare}`
-    );
+    return res.json({ success: true });
   } catch (err) {
-    console.error('❌ DB Save Error:', err);
-    res.status(500).send('Booking failed. Please contact support.');
+    console.error('❌ Error saving booking or sending SMS:', err);
+    return res.status(500).json({ success: false, message: 'Booking failed. Please contact support.' });
   }
 });
-// ✅ CHECK PAYMENT STATUS (used by frontend /payment-status page)
-router.get('/phonepe/status/:merchantOrderId', async (req, res) => {
-  const merchantOrderId = req.params.merchantOrderId;
 
-  try {
-    const booking = await Booking.findOne({ merchantOrderId });
-
-    if (booking && booking.paymentStatus === 'Success') {
-      return res.json({ success: true, status: 'COMPLETED', booking }); // ✅ this line changed
-    } else {
-      return res.json({ success: false, status: 'NOT_FOUND' });
-    }
-  } catch (err) {
-    console.error('❌ Error checking payment status:', err);
-    return res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
 module.exports = router;
 
