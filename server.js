@@ -29,8 +29,10 @@ app.use(express.urlencoded({ extended: true }));
 // ✅ CORS config
 const allowedOrigins = [
   'http://localhost:3000',
+  'http://localhost',
   'https://itarsitaxi.in',
   'https://www.itarsitaxi.in',
+  'capacitor://localhost',
 ];
 
 app.use(cors({
